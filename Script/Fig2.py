@@ -94,7 +94,7 @@ def plot_cluster_net_depscore(cluster, label, pos, edge_color, node_color):
                               degree_df1, 
                               left_index=True, 
                               right_on='protein')
-
+  # position of labels above nodes
   pos_higher = {}
   for k, v in pos.items():
     if(v[1]>0):
@@ -102,6 +102,7 @@ def plot_cluster_net_depscore(cluster, label, pos, edge_color, node_color):
     else:
       pos_higher[k] = (v[0]-0.015, v[1]-0.015)
   
+  # color the plot by clusters
   matplotlib.pyplot.clf()  
   matplotlib.pyplot.figure(figsize=(10, 10))
   matplotlib.pyplot.axis('off')
@@ -114,7 +115,7 @@ def plot_cluster_net_depscore(cluster, label, pos, edge_color, node_color):
                              label=label,
                              with_labels = False) 
   networkx.draw_networkx_labels(cluster, pos_higher, font_size=3.5)
-  # matplotlib.pyplot.tight_layout()
+  matplotlib.pyplot.tight_layout()
   matplotlib.pyplot.savefig(os.path.join(
       os.path.expanduser(output_directory), 
       (label + "_network_kk.pdf")),
@@ -139,7 +140,7 @@ def plot_cluster_net_depscore(cluster, label, pos, edge_color, node_color):
                               width= 0.5, 
                               edge_color="#cccccc")
   networkx.draw_networkx_labels(cluster, pos_higher, font_size=3.5)
-  # matplotlib.pyplot.tight_layout()
+  matplotlib.pyplot.tight_layout()
   matplotlib.pyplot.savefig(os.path.join(
       os.path.expanduser(output_directory), 
       (label + "_network_community.pdf")),
@@ -169,9 +170,9 @@ def plot_cluster_net_depscore(cluster, label, pos, edge_color, node_color):
   # networkx.draw_networkx_labels(cluster, pos_higher, font_size=3.5)
   sm = matplotlib.pyplot.cm.ScalarMappable(cmap=cmap, norm=matplotlib.colors.Normalize(vmin=vmin, vmax=vmax))
   sm.set_array([])
-  sub_ax = matplotlib.pyplot.axes([0.90, 0.55, 0.02, 0.3]) 
+  sub_ax = matplotlib.pyplot.axes([0.90, 0.75, 0.02, 0.2]) 
   cbar = matplotlib.pyplot.colorbar(sm, cax=sub_ax)
-  #matplotlib.pyplot.tight_layout()
+  matplotlib.pyplot.tight_layout()
   matplotlib.pyplot.savefig(os.path.join(
       os.path.expanduser(output_directory), 
       (label + "_depscore.pdf")),
@@ -181,10 +182,10 @@ def plot_cluster_net_depscore(cluster, label, pos, edge_color, node_color):
   matplotlib.pyplot.show()
       
 ##
-plot_cluster_net_depscore(cluster=C1, label = "cluster 1", pos=posC, edge_color = "lightgreen", node_color = "green")  
-plot_cluster_net_depscore(cluster=C2, label = "cluster 2", pos=posC, edge_color = "gold", node_color = "orange")  
-plot_cluster_net_depscore(cluster=C3, label = "cluster 3", pos=posC, edge_color = "skyblue", node_color = "blue")  
-plot_cluster_net_depscore(cluster=C4, label = "cluster 4", pos=posC, edge_color = "pink", node_color = "red")  
+plot_cluster_net_depscore(cluster=C1, label = "cluster 1", pos = posC, edge_color = "lightgreen", node_color = "green")  
+plot_cluster_net_depscore(cluster=C2, label = "cluster 2", pos = posC, edge_color = "gold", node_color = "orange")  
+plot_cluster_net_depscore(cluster=C3, label = "cluster 3", pos = posC, edge_color = "skyblue", node_color = "blue")  
+plot_cluster_net_depscore(cluster=C4, label = "cluster 4", pos = posC, edge_color = "pink", node_color = "red")  
 plot_cluster_net_depscore(cluster=G, pos = pos)  
 
 

@@ -22,4 +22,3 @@ py_install("scipy", method = "conda")
 py_install("PyGObject", method = "conda")
 py_install("netgraph", method = "conda")
 
-gene_sig_cor <- py_to_r(EIF_COR_PRO_sig)
