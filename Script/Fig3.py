@@ -493,6 +493,9 @@ def plot_depscore_histogram(cluster, pos, label, edge_color, node_color):
                                          right_on='protein')
   cluster_degree_depscore.columns = ['depscore', 'degree', 'protein', 'rank']
   
+  vmin = ccle_dep_crispr_median[0].min()
+  vmax = ccle_dep_crispr_median[0].max()
+  cmap = matplotlib.pyplot.cm.coolwarm_r
   matplotlib.pyplot.clf()
   fig, ax = matplotlib.pyplot.subplots(figsize=(10, 10))
   #seaborn.histplot(data=cluster_degree_depscore, x="depscore", fill=True, binwidth=0.035)
@@ -552,10 +555,10 @@ def plot_depscore_histogram(cluster, pos, label, edge_color, node_color):
   matplotlib.pyplot.show()
 
 #plot_depscore_histogram(cluster = G, pos= pos, label = "all proteins", edge_color = "grey", node_color = "black")    
-plot_depscore_histogram(cluster = C1, pos= posC, label = "cluster 1", edge_color = "lightgreen", node_color = "green")    
-plot_depscore_histogram(cluster = C2, pos= posC, label = "cluster 2", edge_color = "gold", node_color = "orange")  
-plot_depscore_histogram(cluster = C3, pos= posC, label = "cluster 3", edge_color = "skyblue", node_color = "blue")  
-plot_depscore_histogram(cluster = C4, pos= posC, label = "cluster 4", edge_color = "pink", node_color = "red")  
+plot_depscore_histogram(cluster=C1, pos=posC, label="cluster 1", edge_color="lightgreen", node_color="green")    
+plot_depscore_histogram(cluster=C2, pos=posC, label="cluster 2", edge_color="gold", node_color="orange")  
+plot_depscore_histogram(cluster=C3, pos=posC, label="cluster 3", edge_color="skyblue", node_color="blue")  
+plot_depscore_histogram(cluster=C4, pos=posC, label="cluster 4", edge_color="pink", node_color="red")  
  
 
 ## Histogram and Density Curve for depscores
