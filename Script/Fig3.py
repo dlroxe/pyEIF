@@ -27,6 +27,8 @@ import scipy.spatial.distance as ssd
 import sklearn
 import sklearn.cluster 
 import sklearn.decomposition 
+import subprocess
+
 
 # critical parameter setting!
 matplotlib.rcParams["pdf.fonttype"] = 42
@@ -36,7 +38,7 @@ pandas.options.mode.chained_assignment = None  # default='warn'
 
 # set current direcotry
 data_file_directory = "~/Documents/Bioinformatics_analysis/eIF4G-analysis/eIF4G_data"
-output_directory = "~/Documents/Bioinformatics_analysis/eIF4G-analysis/eIF4G_output/Fig3"
+output_directory = "~/Documents/Bioinformatics_analysis/eIF4G-analysis/eIF4G_output"
 data_output_directory = "~/Documents/Bioinformatics_analysis/eIF4G-analysis/eIF4G_output/ProcessedData"
 
 
@@ -60,6 +62,8 @@ def ccle_pro():
 
 CCLE_PRO_subset = ccle_pro()
 
+
+os.path.join(data_file_directory, "CRISPR_gene_effect.csv")
 # retrieve published depmap data ######
 def dep_crispr():
   ccle_dep_crispr = pandas.read_csv(os.path.join(data_file_directory, "CRISPR_gene_effect.csv"))
@@ -118,7 +122,7 @@ def eif_ccle_scatter(data, proteins):
     #g.add_legend()
     seaborn.set_style("ticks")
     matplotlib.pyplot.show()
-    matplotlib.pyplot.savefig(os.path.join(os.path.expanduser(output_directory), 
+    matplotlib.pyplot.savefig(os.path.join(os.path.expanduser(output_directory), "Fig3",
     "CCLE_scatter.pdf"), dpi=300)
     # scatter plot of two protein expression across cell lines with color
     g = seaborn.PairGrid(CCLE_EIF_PRO, hue="ccle", diag_sharey=False, corner = True)
@@ -127,7 +131,7 @@ def eif_ccle_scatter(data, proteins):
     g.map_upper(reg_coef)
     g.tight_layout
     g.add_legend()
-    matplotlib.pyplot.savefig(os.path.join(os.path.expanduser(output_directory), 
+    matplotlib.pyplot.savefig(os.path.join(os.path.expanduser(output_directory), "Fig3",
     "CCLE_color_scatter.pdf"), dpi=300)
     matplotlib.pyplot.show()
 
@@ -150,7 +154,7 @@ def eif_corr_sum(df, gene_list):
     return (y, z)
 
 EIF_COR_PRO, EIF_COR_PRO_sig = eif_corr_sum(df = CCLE_PRO_subset, gene_list = EIF2)
-EIF_COR_PRO_sig.to_csv(os.path.join(os.path.expanduser(data_output_directory), "EIF_COR_PRO_sig.csv"))
+EIF_COR_PRO_sig.to_csv(os.path.join(os.path.expanduser(output_directory),"ProcessedData","EIF_COR_PRO_sig.csv"))
 
 
 # Displaying dataframe as an heatmap
@@ -166,9 +170,14 @@ h = seaborn.clustermap(
     yticklabels=False
 )
 matplotlib.pyplot.show()
-matplotlib.pyplot.savefig(os.path.join(os.path.expanduser(output_directory), 
+matplotlib.pyplot.savefig(os.path.join(os.path.expanduser(output_directory), "Fig3",
 "COR_heatmap.pdf"), 
 dpi=300)
+
+
+##### Call R.script to perform heatmap clustering and pathway analysis #####
+subprocess.call("Rscript /home/suwu/github/pyEIF/Script/Fig3.R", shell=True)
+
 
 
 ##############################
@@ -216,10 +225,10 @@ HuRI, HuRI_CCLE = protein_interaction_reference()
 EIF_COR_sig = pandas.DataFrame(EIF_COR_PRO_sig.index.str.split(" ").str[0]).dropna()
 EIF_COR_sig.columns = ['gene']
 
-cluster1 = pandas.read_csv(os.path.join(os.path.expanduser(data_output_directory), "cluster1.csv")) 
-cluster2 = pandas.read_csv(os.path.join(os.path.expanduser(data_output_directory), "cluster2.csv"))
-cluster3 = pandas.read_csv(os.path.join(os.path.expanduser(data_output_directory), "cluster3.csv")) 
-cluster4 = pandas.read_csv(os.path.join(os.path.expanduser(data_output_directory), "cluster4.csv")) 
+cluster1 = pandas.read_csv(os.path.join(os.path.expanduser(output_directory),"ProcessedData", "cluster1.csv")) 
+cluster2 = pandas.read_csv(os.path.join(os.path.expanduser(output_directory),"ProcessedData", "cluster2.csv"))
+cluster3 = pandas.read_csv(os.path.join(os.path.expanduser(output_directory),"ProcessedData", "cluster3.csv")) 
+cluster4 = pandas.read_csv(os.path.join(os.path.expanduser(output_directory),"ProcessedData", "cluster4.csv")) 
 
 cluster_Net = HuRI_CCLE[HuRI_CCLE['protein1'].isin(EIF_COR_sig['gene']) & HuRI_CCLE['protein2'].isin(EIF_COR_sig['gene'])]
 cluster1_Net = HuRI_CCLE[HuRI_CCLE['protein1'].isin(cluster1['gene']) & HuRI_CCLE['protein2'].isin(cluster1['gene'])]
@@ -313,7 +322,7 @@ def plot_combined_cluster_net():
                            connectionstyle="arc3,rad=0.5")                                  
   matplotlib.pyplot.legend()
   matplotlib.pyplot.tight_layout()
-  matplotlib.pyplot.savefig(os.path.join(os.path.expanduser(output_directory), 'CORs_network_kk.pdf'),
+  matplotlib.pyplot.savefig(os.path.join(os.path.expanduser(output_directory), "Fig3",'CORs_network_kk.pdf'),
                     dpi=300,
                     edgecolor='w',
                     #transparent=True,
@@ -362,7 +371,7 @@ def plot_cluster_net_depscore(cluster, label, pos, edge_color, node_color):
   networkx.draw_networkx_labels(cluster, pos_higher, font_size=3.5)
   matplotlib.pyplot.tight_layout()
   matplotlib.pyplot.savefig(os.path.join(
-      os.path.expanduser(output_directory), 
+      os.path.expanduser(output_directory), "Fig3",
       (label + "_network_kk.pdf")),
       dpi=300,
       edgecolor='w',
@@ -387,7 +396,7 @@ def plot_cluster_net_depscore(cluster, label, pos, edge_color, node_color):
   networkx.draw_networkx_labels(cluster, pos_higher, font_size=3.5)
   matplotlib.pyplot.tight_layout()
   matplotlib.pyplot.savefig(os.path.join(
-      os.path.expanduser(output_directory), 
+      os.path.expanduser(output_directory), "Fig3",
       (label + "_network_community.pdf")),
       dpi=300,
       edgecolor='w',
@@ -419,7 +428,7 @@ def plot_cluster_net_depscore(cluster, label, pos, edge_color, node_color):
   cbar = matplotlib.pyplot.colorbar(sm, cax=sub_ax)
   matplotlib.pyplot.tight_layout()
   matplotlib.pyplot.savefig(os.path.join(
-      os.path.expanduser(output_directory), 
+      os.path.expanduser(output_directory), "Fig3",
       (label + "_depscore.pdf")),
       dpi=300,
       edgecolor='w',
@@ -521,7 +530,7 @@ def plot_depscore_histogram(cluster, pos, label, edge_color, node_color):
                          cmap=cmap, 
                          vmin=ccle_dep_crispr_median[0].min(), 
                          vmax=ccle_dep_crispr_median[0].max())
-  matplotlib.pyplot.savefig(os.path.join(os.path.expanduser(output_directory), (label + "_Depscore histogram.pdf")),
+  matplotlib.pyplot.savefig(os.path.join(os.path.expanduser(output_directory),"Fig3", (label + "_Depscore histogram.pdf")),
                       dpi=300,
                       edgecolor='w',
                       #transparent=True,
@@ -546,7 +555,7 @@ def plot_depscore_histogram(cluster, pos, label, edge_color, node_color):
                              node_color =node_color, 
                              label=label,
                              node_size = degree_df['rank'].values*100) 
-  matplotlib.pyplot.savefig(os.path.join(os.path.expanduser(output_directory), 
+  matplotlib.pyplot.savefig(os.path.join(os.path.expanduser(output_directory), "Fig3",
   (label + "_Degree histogram.pdf")),
                       dpi=300,
                       edgecolor='w',
@@ -607,7 +616,7 @@ def depscore_hisplot(data, method):
   # Setting the values for all axes.
   matplotlib.pyplot.setp(((ax1, ax2, ax3), (ax4, ax5, ax6)),  xlim=(-3, 1))
   matplotlib.pyplot.tight_layout()
-  matplotlib.pyplot.savefig(os.path.join(os.path.expanduser(output_directory), (method + "_dep.pdf")),
+  matplotlib.pyplot.savefig(os.path.join(os.path.expanduser(output_directory),"Fig3", (method + "_dep.pdf")),
                         dpi=300,
                         edgecolor='w',
                         #transparent=True,

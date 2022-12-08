@@ -1,3 +1,4 @@
+source("/home/suwu/github/pyEIF/Script/Load.R")
 
 .path <- file.path(output_directory,"ProcessedData","EIF_COR_PRO_sig.csv")
 
