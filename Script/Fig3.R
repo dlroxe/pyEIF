@@ -1,9 +1,5 @@
-library(tidyverse)
-data_file_directory = "~/Documents/Bioinformatics_analysis/eIF4G-analysis/eIF4G_data"
 
-output_directory <- "~/Documents/Bioinformatics_analysis/eIF4G-analysis/eIF4G_output/Fig3"
-data_output_directory <- "~/Documents/Bioinformatics_analysis/eIF4G-analysis/eIF4G_output/ProcessedData"
-.path <- file.path(data_output_directory,"EIF_COR_PRO_sig.csv")
+.path <- file.path(output_directory,"ProcessedData","EIF_COR_PRO_sig.csv")
 
 assign("EIF_COR_PRO_sig",
        data.table::fread(.path ,data.table = FALSE) %>% 
@@ -43,7 +39,8 @@ gene_ht <- ComplexHeatmap::draw(gene_ht1,
                                 heatmap_legend_side = "bottom",
                                 annotation_legend_side = "bottom")
 
-pdf(file.path(path = output_directory,filename = "diff cor heatmap.pdf"),
+#pdf(file.path(path = output_directory,filename = "diff cor heatmap.pdf"),
+pdf(file.path(output_directory, "Fig3","diff cor heatmap.pdf"),
 width = 8,
 height = 10,
 useDingbats = FALSE
@@ -58,7 +55,7 @@ dev.off()
       as.data.frame(stringsAsFactors = FALSE) %>%
       stats::setNames("gene") %>%
       mutate(gene = str_replace_all(gene, " .*", ""))
-    write.csv(c1, file= file.path(data_output_directory, 
+    write.csv(c1, file= file.path(output_directory,"ProcessedData", 
                                   paste0("cluster", cluster_label,".csv")),
               row.names=FALSE)
     c1$entrez <- AnnotationDbi::mapIds(org.Hs.eg.db::org.Hs.eg.db,
@@ -116,7 +113,7 @@ dev.off()
   print(p1)
   
   ggplot2::ggsave(
-    path = file.path(output_directory),
+    path = file.path(output_directory,"Fig3"),
     filename = "pathway cluster.pdf",
     plot = p1,
     width = 9,
@@ -147,7 +144,7 @@ dev.off()
   print(p2)
   
   ggplot2::ggsave(
-    path = file.path(output_directory),
+    path = file.path(output_directory, "Fig3"),
     filename = paste("COR","cluster", cluster_number, "cnet",".pdf"),
     plot = p2,
     width = 9,
@@ -167,47 +164,9 @@ lapply(c(1,2,3,4),
        .plot_cluster_gene_network)
 
 
-######
-library(rbioapi)
-## 1 We create a variable with our genes' NCBI IDs
-proteins <- c("p53", "BRCA1", "cdk2", "Q99835", "CDC42","CDK1","KIF23",
-              "PLK1","RAC2","RACGAP1","RHOA","RHOB", "PHF14", "RBM3")
-## 2 Now we map our protein IDs
-proteins_mapped <- rba_string_map_ids(ids = proteins,
-                                      species = 9606)
-
-int_net <- rba_string_interactions_network(ids = proteins_mapped$stringId,
-                                           species = 9606,
-                                           required_score = 500)
-
-
-## Although we supply only one protein ID here (CD40 protein), you can provide a vector of proteins as the input
-int_partners <- rba_string_interaction_partners(ids = "9606.ENSP00000361359",
-                                                species = 9606,
-                                                required_score = 900)
-
-graph_1 <- rba_string_network_image(ids = proteins_mapped$stringId,
-                                    image_format = "image",
-                                    species = 9606,
-                                    save_image = FALSE,
-                                    required_score = 500,
-                                    network_flavor = "confidence")
 
 
 
 
 
-
-
-
-
-3
-
-### depmap
-
-library("depmap")
-library("ExperimentHub")
-
-BiocManager::install("ggtree")
-BiocManager::install("depmap")
 
