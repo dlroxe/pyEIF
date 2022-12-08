@@ -8,18 +8,15 @@
     data.table = FALSE
   ) %>%
     tibble::as_tibble() %>%
-    # as.data.frame(.) %>%
     dplyr::distinct(.data$Sample, .keep_all = TRUE) %>%
     na.omit() %>%
     tibble::remove_rownames() %>%
     tibble::column_to_rownames(var = "Sample")
-  
   # transpose function from the data.table keeps numeric values as numeric.
   .TCGA_pancancer_transpose <- data.table::transpose(.TCGA_pancancer)
   # get row and column names in order
   rownames(.TCGA_pancancer_transpose) <- colnames(.TCGA_pancancer)
   colnames(.TCGA_pancancer_transpose) <- rownames(.TCGA_pancancer)
-  
   .TCGA_pancancer_transpose[.TCGA_pancancer_transpose == 2] <- "AMP"
   .TCGA_pancancer_transpose[.TCGA_pancancer_transpose == 1] <- "DUP"
   .TCGA_pancancer_transpose[.TCGA_pancancer_transpose == 0] <- "DIPLOID"
@@ -38,12 +35,10 @@
     data.table = FALSE
   ) %>%
     tibble::as_tibble() %>%
-    # as.data.frame(.) %>%
     dplyr::distinct(.data$Sample, .keep_all = TRUE) %>%
     stats::na.omit() %>%
     tibble::remove_rownames() %>%
     tibble::column_to_rownames(var = "Sample")
-  
   # transpose function keeps numeric values as numeric.
   .TCGA_pancancer_transpose <- data.table::transpose(.TCGA_pancancer)
   # get row and colnames in order
