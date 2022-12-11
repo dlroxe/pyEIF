@@ -45,6 +45,7 @@ def dep_rnai():
   new_header = ccle_dep_rnai.iloc[0] #grab the first row for the header
   ccle_dep_rnai = ccle_dep_rnai[1:] #take the data less the header row
   ccle_dep_rnai.columns = new_header #set the header row as the df header
+  ccle_dep_rnai = ccle_dep_rnai.astype('float64')
   return(ccle_dep_rnai)
 
 ccle_dep_rnai = dep_rnai()
@@ -596,6 +597,33 @@ matplotlib.pyplot.clf()
 matplotlib.pyplot.cla()
 matplotlib.pyplot.close()
 
+
+### depmap sensitivity to RNAi 
+def plot_dep_cnv(protein):
+  result = pandas.merge(ccle_anno[['DepMap_ID', 'CCLE_Name']], 
+                      ccle_cnv[['Unnamed: 0',protein]], 
+                      left_on='DepMap_ID', 
+                      right_on='Unnamed: 0',
+                      suffixes=('_dep', '_cnv'))
+  dep_cnv = pandas.merge(ccle_dep_rnai[[protein]], 
+                       result[[protein, 'CCLE_Name']], 
+                       left_index=True, 
+                       right_on='CCLE_Name', 
+                       suffixes=('_dep', '_cnv')).dropna()
+
+  g = seaborn.JointGrid(data=dep_cnv, x=(protein+"_dep"), y=(protein+"_cnv"))
+  g.plot_joint(seaborn.regplot, fit_reg = True, color="royalblue")
+  g.plot_marginals(seaborn.histplot, kde=True, bins=80, color="royalblue")
+  r, p = scipy.stats.pearsonr(dep_cnv[protein+"_dep"], dep_cnv[protein+"_cnv"])
+  g.ax_joint.annotate(f'$\\rho = {r:.3f}, p = {p:.3f}$',
+                      xy=(0.1, 0.9), xycoords='axes fraction',
+                      ha='left', va='center')
+  g.ax_joint.axvline(x=-1)
+  matplotlib.pyplot.show()
+
+
+plot_dep_cnv(protein='EIF4G1 (1981)')
+plot_dep_cnv(protein='EIF3E (3646)')
 
 
 
