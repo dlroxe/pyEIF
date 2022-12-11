@@ -1,4 +1,3 @@
-import lifelines
 
 TCGA_OS = pandas.read_table(os.path.join(data_file_directory, 
 "Survival_SupplementalTable_S1_20171025_xena_sp")).set_index('sample')
@@ -62,57 +61,9 @@ def combined_survival_plot(gene1, gene2):
       bbox_inches='tight') 
   
 combined_survival_plot(gene1="EIF3E", gene2="EIF4G1")
-survival_plot("EIF3H")
-survival_plot("EIF4G1")
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-def survival_plot(gene_name):
-  AMP = (TCGA_CNV_OS_EIF[gene_name] == "AMP")
-  DUP = (TCGA_CNV_OS_EIF[gene_name] == "DUP")
-  DIPLOID = (TCGA_CNV_OS_EIF[gene_name] == "DIPLOID")
-  DEL = (TCGA_CNV_OS_EIF[gene_name] == "DEL")
-  HOMDEL = (TCGA_CNV_OS_EIF[gene_name] == "HOMDEL")
-  
-  matplotlib.pyplot.clf()
-  ax = matplotlib.pyplot.subplot(111)
-  kmf.fit(T[GAIN], event_observed=E[GAIN], label="GAIN")
-  kmf.plot_survival_function(ax=ax)
-  kmf.fit(T[DIPLOID], event_observed=E[DIPLOID], label="DIPLOID")
-  kmf.plot_survival_function(ax=ax)
-  matplotlib.pyplot.title("Lifespans of different CNV " + gene_name);
-  matplotlib.pyplot.show()
-
-survival_plot("EIF3E")
-survival_plot("EIF3H")
-survival_plot("EIF4G1")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+## depscore analysis
 ccle_dep_crispr = pandas.read_csv(os.path.join(data_file_directory, "CRISPR_gene_effect.csv"))
 ccle_dep_crispr.dtypes
 ccle_dep_crispr_median = ccle_dep_crispr.median(numeric_only=True)
