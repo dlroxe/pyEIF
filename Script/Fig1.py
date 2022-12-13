@@ -15,9 +15,8 @@ pandas.options.mode.chained_assignment = None  # default='warn'
 data_file_directory = "~/Documents/Bioinformatics_analysis/eIF4G-analysis/eIF4G_data"
 output_directory = "~/Documents/Bioinformatics_analysis/eIF4G-analysis/eIF4G_output"
 
-
 ##### Call R.script to perform heatmap clustering and pathway analysis #####
-subprocess.call("Rscript /home/suwu/github/pyEIF/Script/Fig1.R", shell=True)
+#subprocess.call("Rscript /home/suwu/github/pyEIF/Script/Fig1.R", shell=True)
 
 ## KM survival analysis
 TCGA_OS = pandas.read_table(os.path.join(data_file_directory, 
