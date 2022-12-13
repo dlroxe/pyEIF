@@ -27,8 +27,8 @@ def ccle_pro():
 
 CCLE_PRO_subset = ccle_pro()
 
-
-os.path.join(data_file_directory, "CRISPR_gene_effect.csv")
+ccle_anno = pandas.read_csv(os.path.join(data_file_directory, "sample_info.csv"))
+ccle_cnv = pandas.read_csv(os.path.join(data_file_directory, "CCLE_gene_cn.csv"))
 # retrieve published depmap data ######
 def dep_crispr():
   ccle_dep_crispr = pandas.read_csv(os.path.join(data_file_directory, "CRISPR_gene_effect.csv"))
