@@ -1,6 +1,6 @@
 import datatable
-import os
 import lifelines
+import os
 import matplotlib
 import pandas
 import subprocess
