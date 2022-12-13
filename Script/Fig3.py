@@ -1,3 +1,25 @@
+import datatable
+import os
+import lifelines
+import matplotlib
+import mygene
+import networkx
+import numpy
+import pandas
+import seaborn 
+import scipy
+import subprocess
+
+# critical parameter setting!
+matplotlib.rcParams["pdf.fonttype"] = 42
+matplotlib.rcParams["ps.fonttype"] = 42
+matplotlib.rcParams['figure.figsize'] = 15, 15
+pandas.options.mode.chained_assignment = None  # default='warn'
+
+# setup current direcotry
+data_file_directory = "~/Documents/Bioinformatics_analysis/eIF4G-analysis/eIF4G_data"
+output_directory = "~/Documents/Bioinformatics_analysis/eIF4G-analysis/eIF4G_output"
+
 # retrieve published proteomics data ######
 def ccle_pro():
     # download the proteomics data

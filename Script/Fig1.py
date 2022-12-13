@@ -1,3 +1,21 @@
+import datatable
+import os
+import lifelines
+import matplotlib
+import pandas
+import subprocess
+
+# critical parameter setting!
+matplotlib.rcParams["pdf.fonttype"] = 42
+matplotlib.rcParams["ps.fonttype"] = 42
+matplotlib.rcParams['figure.figsize'] = 15, 15
+pandas.options.mode.chained_assignment = None  # default='warn'
+
+# setup current direcotry
+data_file_directory = "~/Documents/Bioinformatics_analysis/eIF4G-analysis/eIF4G_data"
+output_directory = "~/Documents/Bioinformatics_analysis/eIF4G-analysis/eIF4G_output"
+
+
 ##### Call R.script to perform heatmap clustering and pathway analysis #####
 subprocess.call("Rscript /home/suwu/github/pyEIF/Script/Fig1.R", shell=True)
 
