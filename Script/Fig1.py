@@ -1,21 +1,28 @@
+##### Call R.script to perform heatmap clustering and pathway analysis #####
+subprocess.call("Rscript /home/suwu/github/pyEIF/Script/Fig1.R", shell=True)
+
 ## KM survival analysis
 TCGA_OS = pandas.read_table(os.path.join(data_file_directory, 
 "Survival_SupplementalTable_S1_20171025_xena_sp")).set_index('sample')
 TCGA_OS = TCGA_OS[["OS", "OS.time"]]
 
-TCGA_CNV = pandas.read_table(os.path.join(data_file_directory, 
-"Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes")).set_index('Sample').T
-TCGA_CNV_EIF = TCGA_CNV[["EIF4G1", "EIF3E", "EIF3H"]]
-TCGA_CNV_EIF[TCGA_CNV_EIF==2] = "AMP"
-TCGA_CNV_EIF[TCGA_CNV_EIF==1] = "DUP"
-TCGA_CNV_EIF[TCGA_CNV_EIF==0] = "DIPLOID"
-TCGA_CNV_EIF[TCGA_CNV_EIF==-1] = "DEL"
-TCGA_CNV_EIF[TCGA_CNV_EIF==-2] = "HOMDEL"
+#TCGA_CNV = pandas.read_table(os.path.join(data_file_directory, 
+#"Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes")).set_index('Sample').T
+#TCGA_CNV_EIF = TCGA_CNV[["EIF4G1", "EIF3E", "EIF3H"]]
+#TCGA_CNV_EIF[TCGA_CNV_EIF==2] = "AMP"
+#TCGA_CNV_EIF[TCGA_CNV_EIF==1] = "DUP"
+#TCGA_CNV_EIF[TCGA_CNV_EIF==0] = "DIPLOID"
+#TCGA_CNV_EIF[TCGA_CNV_EIF==-1] = "DEL"
+#TCGA_CNV_EIF[TCGA_CNV_EIF==-2] = "HOMDEL"
+
+TCGA_CNV = datatable.fread(os.path.join(os.path.expanduser(output_directory),"ProcessedData","TCGA_CNV.csv"), header=True).to_pandas()
+TCGA_CNV = TCGA_CNV.set_index(['C10'])
+
 
 TCGA_CNV_OS_EIF = pandas.merge(TCGA_OS, 
-                              TCGA_CNV_EIF, 
-                              left_index=True, 
-                              right_index=True).dropna()
+                               TCGA_CNV_EIF, 
+                               left_index=True, 
+                               right_index=True).dropna()
 
 T = TCGA_CNV_OS_EIF["OS.time"]
 E = TCGA_CNV_OS_EIF["OS"]
