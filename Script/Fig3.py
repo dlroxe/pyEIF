@@ -1,34 +1,26 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Nov  9 14:48:10 2020
-
-@author: suwu
-"""
-
-
 # retrieve published proteomics data ######
 def ccle_pro():
     # download the proteomics data
     # https://gygi.hms.harvard.edu/data/ccle/protein_quant_current_normalized.csv.gz
-    CCLE_PRO = pandas.read_csv(os.path.join(data_file_directory, 
+    ccle_pro = pandas.read_csv(os.path.join(data_file_directory, 
                                             "protein_quant_current_normalized.csv"))
     # concatenate the Gene_Symbol (with duplicate names) and the Uniprot_Acc
-    CCLE_PRO["Gene_Symbol"] = (CCLE_PRO["Gene_Symbol"].fillna("") + " " + CCLE_PRO["Uniprot_Acc"])
-    CCLE_PRO = CCLE_PRO.set_index("Gene_Symbol")
-    CCLE_PRO_subset = CCLE_PRO[CCLE_PRO.columns.drop(list(CCLE_PRO.filter(regex="Peptides")))]
-    CCLE_PRO_subset = CCLE_PRO_subset.drop(columns=["Protein_Id", 
+    ccle_pro["Gene_Symbol"] = (ccle_pro["Gene_Symbol"].fillna("") + " " + ccle_pro["Uniprot_Acc"])
+    ccle_pro = ccle_pro.set_index("Gene_Symbol")
+    ccle_pro_subset = ccle_pro[ccle_pro.columns.drop(list(ccle_pro.filter(regex="Peptides")))]
+    ccle_pro_subset = ccle_pro_subset.drop(columns=["Protein_Id", 
                                                     "Description", 
                                                     "Group_ID", 
                                                     "Uniprot", 
                                                     "Uniprot_Acc"]).T
-    CCLE_PRO_subset.index.names = ["ccle_name"]
-    return CCLE_PRO_subset
+    ccle_pro_subset.index.names = ["ccle_name"]
+    return ccle_pro_subset
 
 CCLE_PRO_subset = ccle_pro()
 
 ccle_anno = pandas.read_csv(os.path.join(data_file_directory, "sample_info.csv"))
 ccle_cnv = pandas.read_csv(os.path.join(data_file_directory, "CCLE_gene_cn.csv"))
+
 # retrieve published depmap data ######
 def dep_crispr():
   ccle_dep_crispr = pandas.read_csv(os.path.join(data_file_directory, "CRISPR_gene_effect.csv"))
@@ -402,10 +394,10 @@ def plot_cluster_net_depscore(cluster, label, pos, edge_color, node_color):
   matplotlib.pyplot.show()
       
 ##
-plot_cluster_net_depscore(cluster=C1, label = "cluster 1", pos = posC, edge_color = "lightgreen", node_color = "green")  
-plot_cluster_net_depscore(cluster=C2, label = "cluster 2", pos = posC, edge_color = "gold", node_color = "orange")  
-plot_cluster_net_depscore(cluster=C3, label = "cluster 3", pos = posC, edge_color = "skyblue", node_color = "blue")  
-plot_cluster_net_depscore(cluster=C4, label = "cluster 4", pos = posC, edge_color = "pink", node_color = "red")  
+plot_cluster_net_depscore(cluster=C1, label = "cluster 1", pos = posC, edge_color = "lightgreen", node_color = "green")
+plot_cluster_net_depscore(cluster=C2, label = "cluster 2", pos = posC, edge_color = "gold", node_color = "orange")
+plot_cluster_net_depscore(cluster=C3, label = "cluster 3", pos = posC, edge_color = "skyblue", node_color = "blue")
+plot_cluster_net_depscore(cluster=C4, label = "cluster 4", pos = posC, edge_color = "pink", node_color = "red")
 
 
 ##
