@@ -19,12 +19,24 @@ TCGA_CNV_OS_EIF = pandas.merge(TCGA_OS,
 T = TCGA_CNV_OS_EIF["OS.time"]
 E = TCGA_CNV_OS_EIF["OS"]
 
+#This function creates a Kaplan Meier plot using the matplotlib and lifelines libraries in Python. 
+# The Kaplan Meier method is used to estimate the survival function from censored data. 
+# In this case, the data is censored by overall survival time after a diagnosis of cancer. 
+# The function takes two gene names as input and creates a plot with four lines showing the estimated survival probabilities for the following groups:
+    #Patients with amp and dup in gene 1
+    #Patients with amp and dup  in gene 2
+    #Patients with amp and dup  in both gene 1 and gene 2
+    #Patients with diploid copies of both genes
+# The function also performs a log-rank test on each of these groups and compares them to the diploid group to see if there is a significant difference in survival rates between the groups. 
+# The results of these tests are displayed on the plot.
 def combined_survival_plot(gene1, gene2):
+  # Define the CNV status for each gene
   gene1_GAIN = (TCGA_CNV_OS_EIF[gene1] == "AMP")|(TCGA_CNV_OS_EIF[gene1] == "DUP")
   gene2_GAIN = (TCGA_CNV_OS_EIF[gene2] == "AMP")|(TCGA_CNV_OS_EIF[gene2] == "DUP")
   gene1_gene2_GAIN = gene1_GAIN & gene2_GAIN
   DIPLOID = (TCGA_CNV_OS_EIF[gene1] == "DIPLOID")&(TCGA_CNV_OS_EIF[gene2] == "DIPLOID")
-
+ 
+  # Create a Kaplan Meier plot
   matplotlib.pyplot.clf()
   ax = matplotlib.pyplot.subplot()
   kmf = lifelines.KaplanMeierFitter()
@@ -62,6 +74,16 @@ def combined_survival_plot(gene1, gene2):
 combined_survival_plot(gene1="EIF3E", gene2="EIF4G1")
 
 
+#This function creates a Kaplan Meier plot using the matplotlib and lifelines libraries in Python. 
+# The Kaplan Meier method is used to estimate the survival function from censored data. 
+# In this case, the data is censored by overall survival time after a diagnosis of cancer. 
+# The function takes two gene names as input and creates a plot with four lines showing the estimated survival probabilities for the following groups:
+    #Patients with amp in gene 1
+    #Patients with amp in gene 2
+    #Patients with amp in both gene 1 and gene 2
+    #Patients with diploid copies of both genes
+# The function also performs a log-rank test on each of these groups and compares them to the diploid group to see if there is a significant difference in survival rates between the groups. 
+# The results of these tests are displayed on the plot.
 def combined_survival_plot2(gene1, gene2):
   gene1_GAIN = (TCGA_CNV_OS_EIF[gene1] == "AMP")
   gene2_GAIN = (TCGA_CNV_OS_EIF[gene2] == "AMP")
