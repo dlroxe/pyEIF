@@ -15,8 +15,8 @@ pandas.options.mode.chained_assignment = None  # default='warn'
 data_file_directory = "~/Documents/Bioinformatics_analysis/eIF4G-analysis/eIF4G_data"
 output_directory = "~/Documents/Bioinformatics_analysis/eIF4G-analysis/eIF4G_output"
 
-##### Call R.script to perform heatmap clustering and pathway analysis #####
-#subprocess.call("Rscript /home/suwu/github/pyEIF/Script/Fig1.R", shell=True)
+# Call R.script to generate TCGA_CNV.csv data, perform heatmap clustering and pathway analysis #
+subprocess.call("Rscript /home/suwu/github/pyEIF/Script/Fig1.R", shell=True)
 
 ## KM survival analysis
 TCGA_OS = pandas.read_table(os.path.join(data_file_directory, 
@@ -36,7 +36,7 @@ TCGA_CNV_OS_EIF = pandas.merge(TCGA_OS,
 T = TCGA_CNV_OS_EIF["OS.time"]
 E = TCGA_CNV_OS_EIF["OS"]
 
-#This function creates a Kaplan Meier plot using the matplotlib and lifelines libraries in Python. 
+# This function creates a Kaplan Meier plot using the matplotlib and lifelines libraries in Python. 
 # The Kaplan Meier method is used to estimate the survival function from censored data. 
 # In this case, the data is censored by overall survival time after a diagnosis of cancer. 
 # The function takes two gene names as input and creates a plot with four lines showing the estimated survival probabilities for the following groups:
@@ -91,7 +91,7 @@ def combined_survival_plot(gene1, gene2):
 combined_survival_plot(gene1="EIF3E", gene2="EIF4G1")
 
 
-#This function creates a Kaplan Meier plot using the matplotlib and lifelines libraries in Python. 
+# This function creates a Kaplan Meier plot using the matplotlib and lifelines libraries in Python. 
 # The Kaplan Meier method is used to estimate the survival function from censored data. 
 # In this case, the data is censored by overall survival time after a diagnosis of cancer. 
 # The function takes two gene names as input and creates a plot with four lines showing the estimated survival probabilities for the following groups:
