@@ -25,7 +25,7 @@ gene_ht1 <- ComplexHeatmap::Heatmap(
   show_row_names = FALSE,
   row_names_gp = grid::gpar(fontsize = 6),
   row_split = 4,
-  # column_split = 8,
+  #row_km = 4,
   row_title = "cluster %s",
   row_title_gp = grid::gpar(fontsize = 15, fontface = "bold"),
   row_dend_reorder = TRUE,
