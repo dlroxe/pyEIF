@@ -66,7 +66,7 @@ plot_heatmap <- function(df, gene) {
     # To get rid of this problem, row_km_repeats is set to 100 to run kmeans() multiple times 
     # and a final consensus k-means clustering is used. 
     row_km_repeats = 100,
-    row_km = 4,
+    row_km = 5,
     # column_split = 8,
     row_title = "cluster %s",
     row_title_gp = grid::gpar(fontsize = 15, fontface = "bold"),
@@ -123,8 +123,8 @@ plot_heatmap <- function(df, gene) {
     c1 <- stats::na.omit(c1)
     return(c1$entrez)
   }
-  cluster.num <- c(1:4)
-  names(cluster.num) <- paste("cluster", 1:4)
+  cluster.num <- c(1:5)
+  names(cluster.num) <- paste("cluster", 1:5)
   
   return(lapply(cluster.num, cluster.geneID.list))
 }
@@ -149,7 +149,7 @@ plot_heatmap <- function(df, gene) {
                                  title = paste("The Most Enriched", 
                                                pathway, 
                                                "Pathways in", gene_name, "CORs"),
-                                 showCategory = 8,
+                                 showCategory = 6,
                                  font.size = 10 #,
                                  #includeAll = FALSE
   ) +
@@ -216,7 +216,7 @@ COR_analysis <- function(df, gene) {
   cluster.data <- .get_cluster_genes(df1 = as.matrix(df), df2 = gene_ht)
   ck.REACTOME <- .cluster_pathway_analysis(cluster.data)
   .pathway_dotplot(df = ck.REACTOME, gene_name = gene, pathway = "REACTOME")
-  lapply(c(1, 2, 3, 4),
+  lapply(c(1, 2, 3, 4, 5),
     data = cluster.data,
     gene_name = gene,
     .plot_cluster_gene_network
@@ -230,3 +230,6 @@ COR_analysis(df = EIF4A2_CNV_COR_RNAseq_sig, gene = "EIF4A2")
 COR_analysis(df = EIF3E_CNV_COR_RNAseq_sig, gene = "EIF3E")
 
 COR_analysis(df = EIF3H_CNV_COR_RNAseq_sig, gene = "EIF3H")
+
+
+
