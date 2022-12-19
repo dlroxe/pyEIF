@@ -1,3 +1,4 @@
+import community
 import datatable
 import os
 import lifelines
@@ -101,9 +102,9 @@ def eif_ccle_scatter(data, proteins):
     g.tight_layout
     #g.add_legend()
     seaborn.set_style("ticks")
-    matplotlib.pyplot.show()
     matplotlib.pyplot.savefig(os.path.join(os.path.expanduser(output_directory), "Fig3",
     "CCLE_scatter.pdf"), dpi=300)
+    matplotlib.pyplot.show()
     # scatter plot of two protein expression across cell lines with color
     g = seaborn.PairGrid(CCLE_EIF_PRO, hue="ccle", diag_sharey=False, corner = True)
     g.map_lower(seaborn.scatterplot)
@@ -149,10 +150,11 @@ h = seaborn.clustermap(
     #cbar_pos=(.2, .2, .03, .4),
     yticklabels=False
 )
-matplotlib.pyplot.show()
 matplotlib.pyplot.savefig(os.path.join(os.path.expanduser(output_directory), "Fig3",
 "COR_heatmap.pdf"), 
 dpi=300)
+matplotlib.pyplot.show()
+
 
 
 ##### Call R.script to perform heatmap clustering and pathway analysis #####
