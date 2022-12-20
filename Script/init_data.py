@@ -1,80 +1,103 @@
 #!/usr/bin/python3
+"""
+Read and parse raw data related to the pyEIF project.
+
+This file may be imported as a module or run as a stand-alone executable.
+
+This code relies upon Googles 'ABSL' ('Abseil') libraries.  Among other things, these provide a mechanism to define
+command-line flags.  So, for example, this file may be executed in the following manner:
+
+./init_data.py --data_directory=~/Desktop/pyeif_data
+
+For a description of available flags, execute with the --help option:
+
+./init_data.py --help
+
+"""
+from absl import app
+from absl import flags
+from typing import List
 import datatable
 import os
 
-# TODO(dlroxe): Make a command-line argument with this or some other value as a default.
-data_file_directory = '/home/dlroxe/Desktop/pyeif_data'
-
-# TODO(dlroxe): Make a class, and store this as a class variable.
-
-cnv_code_mappings = {
-  2: 'AMP',
-  1: 'DUP',
-  0: 'DIPLOID',
-  -1: 'DEL',
-  -2: 'HOMDEL',
-}
+FLAGS = flags.FLAGS
+flags.DEFINE_string('data_directory', '~/Desktop/pyeif_data', 'parent dir for data files')
 
 
-def get_tcga_cnv_value(raw_data_file=None, genes_of_interest=None):
-  """
-  Reads raw_data_file and returns a related dataframe.
+class TcgaCnvParser:
+  cnv_code_mappings = {
+    2: 'AMP',
+    1: 'DUP',
+    0: 'DIPLOID',
+    -1: 'DEL',
+    -2: 'HOMDEL',
+  }
 
-  The input file contains raw data in the following form:
+  def __init__(self):
+    pass
 
-                               TCGA-A5-A0GI-01  TCGA-S9-A7J2-01  TCGA-06-0150-01  ...   TCGA-DD-A115-01
-  Sample                                                                          ...
-  ACAP3                                  0.0             -1.0              0.0    ...             0.0
-  ACTRT2                                 0.0             -1.0              0.0    ...             0.0
-  AGRN                                   0.0             -1.0              0.0    ...             0.0
-  ANKRD65                                0.0             -1.0              0.0    ...             0.0
-  ATAD3A                                 0.0             -1.0              0.0    ...             0.0
+  @classmethod
+  def get_tcga_cnv_value(cls, raw_data_file: str = None, genes_of_interest: List[str] = None) -> datatable.Frame:
+    """
+    Reads raw_data_file and returns a related dataframe.
 
-  The rows are genes, and the columns are samples.  This function transposes the data and selects certain genes.
-  For example, for certain EIF genes, it returns a dataframe of this form:
+    The input file contains raw data in the following form:
 
-  Sample          EIF4G1 EIF3E EIF3H
-  TCGA-A5-A0GI-01    0.0   0.0   0.0
-  TCGA-S9-A7J2-01    0.0   0.0   0.0
-  TCGA-06-0150-01    0.0   0.0   0.0
-  ...                ...   ...   ...
-  TCGA-DD-A115-01    0.0  -1.0  -1.0
+                                 TCGA-A5-A0GI-01  TCGA-S9-A7J2-01  TCGA-06-0150-01  ...   TCGA-DD-A115-01
+    Sample                                                                          ...
+    ACAP3                                  0.0             -1.0              0.0    ...             0.0
+    ACTRT2                                 0.0             -1.0              0.0    ...             0.0
+    AGRN                                   0.0             -1.0              0.0    ...             0.0
+    ANKRD65                                0.0             -1.0              0.0    ...             0.0
+    ATAD3A                                 0.0             -1.0              0.0    ...             0.0
 
-  If genes_of_interest is None, then no filtering of the columns is performed.
+    The rows are genes, and the columns are samples.  This function transposes the data and selects certain genes.
+    For example, for certain EIF genes, it returns a dataframe of this form:
 
-  :param raw_data_file: the name of a file (relative to the configured data directory) containing raw data
-  :param genes_of_interest: a list of genes; in this example ['EIF4G1', 'EIF3E', 'EIF3H'], or None
-  :return: a data frame with samples as rows and selected genes as columns (or all genes, if genes_of_interest is None).
-  """
-  df = datatable.fread(file=os.path.join(data_file_directory, raw_data_file)
-                       ).to_pandas().set_index('Sample').transpose()
-  return df[genes_of_interest] if genes_of_interest else df
+    Sample          EIF4G1 EIF3E EIF3H
+    TCGA-A5-A0GI-01    0.0   0.0   0.0
+    TCGA-S9-A7J2-01    0.0   0.0   0.0
+    TCGA-06-0150-01    0.0   0.0   0.0
+    ...                ...   ...   ...
+    TCGA-DD-A115-01    0.0  -1.0  -1.0
 
+    If genes_of_interest is None, then no filtering of the columns is performed.
 
-def get_tcga_cnv(genes_of_interest=None, values_data_frame=None):
-  """
-  Returns the output of get_tcga_cnv_value(), but with numeric cell values replaced by labels.
+    :param raw_data_file: the name of a file (relative to the configured data directory) containing raw data
+    :param genes_of_interest: a list of genes; in this example ['EIF4G1', 'EIF3E', 'EIF3H'], or None
+    :return: a data frame with samples as rows and selected genes as columns
+     (or all genes, if genes_of_interest is None).
+    """
+    df = datatable.fread(file=os.path.join(FLAGS.data_directory, raw_data_file)
+                         ).to_pandas().set_index('Sample').transpose()
+    return df[genes_of_interest] if genes_of_interest else df
 
-  Sample output for a selection of EIF genes:
+  @classmethod
+  def get_tcga_cnv(cls, genes_of_interest=None, values_data_frame=None):
+    """
+    Returns the output of get_tcga_cnv_value(), but with numeric cell values replaced by labels.
 
-  Sample            EIF4G1    EIF3E    EIF3H
-  TCGA-A5-A0GI-01  DIPLOID  DIPLOID  DIPLOID
-  TCGA-S9-A7J2-01  DIPLOID  DIPLOID  DIPLOID
-  TCGA-06-0150-01  DIPLOID  DIPLOID  DIPLOID
-  ...                  ...      ...      ...
-  TCGA-DD-A115-01  DIPLOID      DEL      DEL
+    Sample output for a selection of EIF genes:
 
-  :param genes_of_interest: a list of genes; in this example ['EIF4G1', 'EIF3E', 'EIF3H']
-  :param values_data_frame: if None, then the function uses the value returned by get_tcga_cnv_value(genes_of_interest)
-  :return: a data frame with samples as rows, selected genes as columns, and string labels as cell values.
-  """
-  df = values_data_frame or get_tcga_cnv_value(
-    raw_data_file='Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes',
-    genes_of_interest=genes_of_interest)
-  for col in genes_of_interest:
-    for (code, label) in cnv_code_mappings.items():
-      df[col].mask(df[col] == code, label, inplace=True)
-  return df
+    Sample            EIF4G1    EIF3E    EIF3H
+    TCGA-A5-A0GI-01  DIPLOID  DIPLOID  DIPLOID
+    TCGA-S9-A7J2-01  DIPLOID  DIPLOID  DIPLOID
+    TCGA-06-0150-01  DIPLOID  DIPLOID  DIPLOID
+    ...                  ...      ...      ...
+    TCGA-DD-A115-01  DIPLOID      DEL      DEL
+
+    :param genes_of_interest: a list of genes; in this example ['EIF4G1', 'EIF3E', 'EIF3H']
+    :param values_data_frame: if None, then the function uses the value
+           returned by get_tcga_cnv_value('Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes', genes_of_interest)
+    :return: a data frame with samples as rows, selected genes as columns, and string labels as cell values.
+    """
+    df = values_data_frame or cls.get_tcga_cnv_value(
+      raw_data_file='Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes',
+      genes_of_interest=genes_of_interest)
+    for col in genes_of_interest:
+      for (code, label) in cls.cnv_code_mappings.items():
+        df[col].mask(df[col] == code, label, inplace=True)
+    return df
 
 
 def initialize_cnv_data():
@@ -99,7 +122,7 @@ def initialize_cnv_data():
   #    get_tcga_cnv_value()
 
   TCGA_sampletype <- readr::read_tsv(file.path(
-    data_file_directory,
+    flags.data_directory,
     "TCGA_phenotype_denseDataOnlyDownload.tsv"
   )) %>%
     as.data.frame() %>%
@@ -282,17 +305,14 @@ coocurrance_analysis(df = TCGA_CNV,
 """
 
 
-def main():
-  # Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes
-  # Gistic2_CopyNumber_Gistic2_all_data_by_genes
-
-  all_data = get_tcga_cnv_value(raw_data_file='Gistic2_CopyNumber_Gistic2_all_data_by_genes')
+def main(argv):
+  all_data = TcgaCnvParser.get_tcga_cnv_value(raw_data_file='Gistic2_CopyNumber_Gistic2_all_data_by_genes')
   print(f'all data\n{all_data}')
 
   eif_genes = ["EIF4G1", "EIF3E", "EIF3H", ]
-  eif_threshold_data = get_tcga_cnv(genes_of_interest=eif_genes)
+  eif_threshold_data = TcgaCnvParser.get_tcga_cnv(genes_of_interest=eif_genes)
   print(f'eif threshold data\n{eif_threshold_data}')
 
 
 if __name__ == "__main__":
-  main()
+  app.run(main)
