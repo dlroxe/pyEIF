@@ -3,7 +3,7 @@ import datatable
 import os
 
 # TODO(dlroxe): Make a command-line argument with this or some other value as a default.
-data_file_directory = '~/Desktop/pyeif_data'
+data_file_directory = '/home/dlroxe/Desktop/pyeif_data'
 
 # TODO(dlroxe): Make a class, and store this as a class variable.
 
@@ -16,9 +16,9 @@ cnv_code_mappings = {
 }
 
 
-def get_tcga_cnv_value(genes_of_interest):
+def get_tcga_cnv_value(raw_data_file=None, genes_of_interest=None):
   """
-  Reads 'Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes' and returns a related dataframe.
+  Reads raw_data_file and returns a related dataframe.
 
   The input file contains raw data in the following form:
 
@@ -40,17 +40,18 @@ def get_tcga_cnv_value(genes_of_interest):
   ...                ...   ...   ...
   TCGA-DD-A115-01    0.0  -1.0  -1.0
 
-  :param genes_of_interest: a list of genes; in this example ['EIF4G1', 'EIF3E', 'EIF3H']
-  :return: a data frame with samples as rows and selected genes as columns.
+  If genes_of_interest is None, then no filtering of the columns is performed.
+
+  :param raw_data_file: the name of a file (relative to the configured data directory) containing raw data
+  :param genes_of_interest: a list of genes; in this example ['EIF4G1', 'EIF3E', 'EIF3H'], or None
+  :return: a data frame with samples as rows and selected genes as columns (or all genes, if genes_of_interest is None).
   """
-  df = datatable.fread(
-    file=os.path.join(data_file_directory,
-                      'Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes')
-  ).to_pandas().set_index('Sample').transpose()[genes_of_interest]
-  return df
+  df = datatable.fread(file=os.path.join(data_file_directory, raw_data_file)
+                       ).to_pandas().set_index('Sample').transpose()
+  return df[genes_of_interest] if genes_of_interest else df
 
 
-def get_tcga_cnv(genes_of_interest, values_data_frame=None):
+def get_tcga_cnv(genes_of_interest=None, values_data_frame=None):
   """
   Returns the output of get_tcga_cnv_value(), but with numeric cell values replaced by labels.
 
@@ -67,7 +68,9 @@ def get_tcga_cnv(genes_of_interest, values_data_frame=None):
   :param values_data_frame: if None, then the function uses the value returned by get_tcga_cnv_value(genes_of_interest)
   :return: a data frame with samples as rows, selected genes as columns, and string labels as cell values.
   """
-  df = values_data_frame or get_tcga_cnv_value(genes_of_interest)
+  df = values_data_frame or get_tcga_cnv_value(
+    raw_data_file='Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes',
+    genes_of_interest=genes_of_interest)
   for col in genes_of_interest:
     for (code, label) in cnv_code_mappings.items():
       df[col].mask(df[col] == code, label, inplace=True)
@@ -280,9 +283,15 @@ coocurrance_analysis(df = TCGA_CNV,
 
 
 def main():
+  # Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes
+  # Gistic2_CopyNumber_Gistic2_all_data_by_genes
+
+  all_data = get_tcga_cnv_value(raw_data_file='Gistic2_CopyNumber_Gistic2_all_data_by_genes')
+  print(f'all data\n{all_data}')
+
   eif_genes = ["EIF4G1", "EIF3E", "EIF3H", ]
-  df = get_tcga_cnv(genes_of_interest=eif_genes)
-  print(df)
+  eif_threshold_data = get_tcga_cnv(genes_of_interest=eif_genes)
+  print(f'eif threshold data\n{eif_threshold_data}')
 
 
 if __name__ == "__main__":
