@@ -25,6 +25,12 @@ flags.DEFINE_string('data_directory', '~/Desktop/pyeif_data', 'parent dir for da
 
 
 class TcgaCnvParser:
+  """
+  Methods and configuration settings for parsing TCGA CNV data.
+  """
+
+  # This variable is left public because it encodes the implicit meaning for the values
+  # in Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes.
   cnv_code_mappings = {
     2: 'AMP',
     1: 'DUP',
@@ -100,6 +106,9 @@ class TcgaCnvParser:
     return df
 
 
+# TODO(dlroxe): most code below this point is commented-out with docstring-style quotes, until it can be
+# translated from R to Python.  After that is done, it probably should/will be reorganized into a class
+# structure, as well.
 def initialize_cnv_data():
   # rlang::env_binding_unlock(parent.env(environment()), nms = NULL)
   pass
