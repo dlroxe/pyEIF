@@ -1,7 +1,7 @@
 import datatable
 import lifelines
-import os
 import matplotlib
+import os
 import pandas
 import seaborn 
 import subprocess

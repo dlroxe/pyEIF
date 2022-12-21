@@ -1,14 +1,14 @@
 import community
 import datatable
-import os
 import lifelines
 import matplotlib
 import mygene
 import networkx
 import numpy
+import os
 import pandas
-import seaborn 
 import scipy
+import seaborn 
 import subprocess
 
 # critical parameter setting!
