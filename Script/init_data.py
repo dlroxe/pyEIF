@@ -110,8 +110,9 @@ class TcgaCnvParser:
     :return: a data frame with samples as rows, selected genes as columns, and string labels as cell values.
     """
     # Note the .replace() call.  It just applies the dictionary, and is very quick.
-    return values_data_frame or cls.get_tcga_cnv_value(
-      raw_data_file=FLAGS.cnv_data_by_gene_thresholds).replace(cls.cnv_code_mappings)
+    if values_data_frame is None:
+      values_data_frame = cls.get_tcga_cnv_value(raw_data_file=FLAGS.cnv_data_by_gene_thresholds)
+    return values_data_frame.replace(cls.cnv_code_mappings)
 
   # TODO(dlroxe): Probably it's worth documenting the join() semantics more carefully, particularly regarding the
   # indices, in merge_cnv_phenotypes().
@@ -309,7 +310,8 @@ def main(argv):
   all_data = TcgaCnvParser.get_tcga_cnv_value(raw_data_file=FLAGS.all_data_by_genes)
   print(f'all data\n{all_data}')
 
-  all_threshold_data = TcgaCnvParser.get_tcga_cnv()
+  raw_threshold_data = TcgaCnvParser.get_tcga_cnv_value(raw_data_file=FLAGS.cnv_data_by_gene_thresholds)
+  all_threshold_data = TcgaCnvParser.get_tcga_cnv(values_data_frame=raw_threshold_data)
   eif_threshold_data = all_threshold_data[eif_genes]
   print(f'eif threshold data\n{eif_threshold_data}')
 
