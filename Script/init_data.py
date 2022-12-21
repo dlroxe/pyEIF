@@ -16,9 +16,10 @@ For a description of available flags, execute with the --help option:
 """
 from absl import app
 from absl import flags
-from typing import List
+from typing import List, Optional
 import datatable
 import os
+import pandas
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string('data_directory', '~/Desktop/pyeif_data', 'parent dir for data files')
@@ -32,18 +33,25 @@ class TcgaCnvParser:
   # This variable is left public because it encodes the implicit meaning for the values
   # in Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes.
   cnv_code_mappings = {
-    2: 'AMP',
-    1: 'DUP',
-    0: 'DIPLOID',
-    -1: 'DEL',
-    -2: 'HOMDEL',
+    2.0: 'AMP',
+    1.0: 'DUP',
+    0.0: 'DIPLOID',
+    -1.0: 'DEL',
+    -2.0: 'HOMDEL',
   }
 
   def __init__(self):
     pass
 
+  # TODO(dlroxe): Probably eliminate 'genes_of_interest' as a parameter from the next two functions.
+  # It's very easy for the caller to simply apply the [] operator to achieve the desired result, without
+  # impacting the signatures and documentation of these functions.  Furthermore, these functions are now
+  # quick enough for the full dataset that the ability to specify a subset when the function is called
+  # doesn't provide a compelling performance benefit, either.
+
   @classmethod
-  def get_tcga_cnv_value(cls, raw_data_file: str = None, genes_of_interest: List[str] = None) -> datatable.Frame:
+  def get_tcga_cnv_value(cls, raw_data_file: Optional[str] = None,
+                         genes_of_interest: Optional[List[str]] = None) -> pandas.DataFrame:
     """
     Reads raw_data_file and returns a related dataframe.
 
@@ -67,7 +75,7 @@ class TcgaCnvParser:
     ...                ...   ...   ...
     TCGA-DD-A115-01    0.0  -1.0  -1.0
 
-    If genes_of_interest is None, then no filtering of the columns is performed.
+    If genes_of_interest is None, then no filtering of the columns is performed (i.e. all genes will be selected).
 
     :param raw_data_file: the name of a file (relative to the configured data directory) containing raw data
     :param genes_of_interest: a list of genes; in this example ['EIF4G1', 'EIF3E', 'EIF3H'], or None
@@ -75,11 +83,12 @@ class TcgaCnvParser:
      (or all genes, if genes_of_interest is None).
     """
     df = datatable.fread(file=os.path.join(FLAGS.data_directory, raw_data_file)
-                         ).to_pandas().set_index('Sample').transpose()
+                         ).to_pandas().sort_values(by=['Sample']).set_index('Sample').transpose()
     return df[genes_of_interest] if genes_of_interest else df
 
   @classmethod
-  def get_tcga_cnv(cls, genes_of_interest=None, values_data_frame=None):
+  def get_tcga_cnv(cls, genes_of_interest: Optional[str] = None,
+                   values_data_frame: Optional[datatable.Frame] = None) -> pandas.DataFrame:
     """
     Returns the output of get_tcga_cnv_value(), but with numeric cell values replaced by labels.
 
@@ -92,81 +101,56 @@ class TcgaCnvParser:
     ...                  ...      ...      ...
     TCGA-DD-A115-01  DIPLOID      DEL      DEL
 
-    :param genes_of_interest: a list of genes; in this example ['EIF4G1', 'EIF3E', 'EIF3H']
+    :param genes_of_interest: a list of genes (in this example ['EIF4G1', 'EIF3E', 'EIF3H']), or 'None' for all genes
     :param values_data_frame: if None, then the function uses the value
            returned by get_tcga_cnv_value('Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes', genes_of_interest)
     :return: a data frame with samples as rows, selected genes as columns, and string labels as cell values.
     """
-    df = values_data_frame or cls.get_tcga_cnv_value(
+    # Note the .replace() call.  It just applies the dictionary, and is very quick.
+    return values_data_frame or cls.get_tcga_cnv_value(
       raw_data_file='Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes',
-      genes_of_interest=genes_of_interest)
-    for col in genes_of_interest:
-      for (code, label) in cls.cnv_code_mappings.items():
-        df[col].mask(df[col] == code, label, inplace=True)
-    return df
+      genes_of_interest=genes_of_interest).replace(cls.cnv_code_mappings)
+
+  # TODO(dlroxe): Probably it's worth documenting the join() semantics more carefully, particularly regarding the
+  # indices, in merge_cnv_phenotypes().
+  @classmethod
+  def merge_cnv_phenotypes(cls, cnv_data: Optional[pandas.DataFrame] = None) -> pandas.DataFrame:
+    """
+    Merges TCGA phenotype data, specifically 'sample type' and 'primary disease', with CNV data.
+
+    For example, CNV data might include this row:
+
+    Sample          7SK|ENSG00000232512.2 7SK|ENSG00000249352.3 7SK|ENSG00000254144.2  ... snoZ6|ENSG00000264452.1 snoZ6|ENSG00000266692.1 snosnR66
+    TCGA-A5-A0GI-01               DIPLOID               DIPLOID               DIPLOID  ...                 DIPLOID                 DIPLOID  DIPLOID
+
+    Phenotype data might include this row:
+
+                       sample.type                        primary_disease
+    Sample
+    TCGA-A5-A0GI-01  Primary Tumor  uterine corpus endometrioid carcinoma
+
+    The merged data would look like this:
+
+                    7SK|ENSG00000232512.2 7SK|ENSG00000249352.3 7SK|ENSG00000254144.2  ... snosnR66    sample.type                        primary_disease
+    TCGA-A5-A0GI-01               DIPLOID               DIPLOID               DIPLOID  ...  DIPLOID  Primary Tumor  uterine corpus endometrioid carcinoma
+
+
+    :param cnv_data: a dataframe obtained from get_tcga_cnv() or get_tcga_value()
+    :return: a merged dataframe that combines CNV value/threshold data with CNV phenotype data.
+    """
+    cnv = TcgaCnvParser.get_tcga_cnv() if cnv_data is None else cnv_data
+
+    phenotypes = datatable.fread(file=os.path.join(FLAGS.data_directory, 'TCGA_phenotype_denseDataOnlyDownload.tsv')
+                                 ).to_pandas()[['sample', 'sample_type', '_primary_disease']].rename(
+      columns={'sample': 'Sample', 'sample_type': 'sample.type', '_primary_disease': 'primary_disease'}).sort_values(
+      by=['Sample']).set_index('Sample')
+
+    return cnv.join(phenotypes, how='inner')
 
 
 # TODO(dlroxe): most code below this point is commented-out with docstring-style quotes, until it can be
 # translated from R to Python.  After that is done, it probably should/will be reorganized into a class
 # structure, as well.
-def initialize_cnv_data():
-  # rlang::env_binding_unlock(parent.env(environment()), nms = NULL)
-  pass
-  """
-  CNV_path <- file.path(output_directory, "ProcessedData","TCGA_CNV.csv")
-  CNV_value_path <- file.path(output_directory, "ProcessedData","TCGA_CNV_value.csv")
-
-  # if (!file.exists(CNV_path)):
-  # ...call get_tcga_cnv() and store the result
-  # ...write the result of get_tcga_cnv() to the file
-  # else:
-  # ...read the data from the file instead of calling
-  #    get_tcga_cnv()
-
-  # if (!file.exists(CNV_value_path)):
-  # ...call get_tcga_cnv_value() and store the result
-  # ...write the result of get_tcga_cnv_value() to the file
-  # else:
-  # ...read the data from the file instead of calling
-  #    get_tcga_cnv_value()
-
-  TCGA_sampletype <- readr::read_tsv(file.path(
-    flags.data_directory,
-    "TCGA_phenotype_denseDataOnlyDownload.tsv"
-  )) %>%
-    as.data.frame() %>%
-    dplyr::distinct(.data$sample, .keep_all = TRUE) %>%
-    stats::na.omit() %>%
-    tibble::remove_rownames() %>%
-    tibble::column_to_rownames(var = "sample") %>%
-    dplyr::select("sample_type", "_primary_disease") %>%
-    dplyr::rename(
-      "sample.type" = "sample_type",
-      "primary.disease" = "_primary_disease"
-    )
-
-  # if (!file.exists(file.path(output_directory,"ProcessedData","TCGA_CNV_sampletype.csv"))):
-  #
-  #   assign("TCGA_CNV_sampletype",
-  #          merge(TCGA_CNV,
-  #                TCGA_sampletype,
-  #                by    = "row.names",
-  #                all.x = TRUE
-  #          ) %>%
-  #            dplyr::filter(.data$sample.type != "Solid Tissue Normal") %>%
-  #            tibble::remove_rownames() %>%
-  #            tibble::column_to_rownames(var = "Row.names"),
-  #          envir = parent.env(environment())
-  #   )
-  # ...then write the file
-
-  # else:
-  # ...read the file and use it to assing TCGA_CNV_sampletype
-
-  """
-
-
-# initialize_cnv_data()
 
 def get_top_genes(df, label, percent):
   pass
@@ -315,12 +299,21 @@ coocurrance_analysis(df = TCGA_CNV,
 
 
 def main(argv):
+  eif_genes = ["EIF4G1", "EIF3E", "EIF3H", ]
+
   all_data = TcgaCnvParser.get_tcga_cnv_value(raw_data_file='Gistic2_CopyNumber_Gistic2_all_data_by_genes')
   print(f'all data\n{all_data}')
 
-  eif_genes = ["EIF4G1", "EIF3E", "EIF3H", ]
-  eif_threshold_data = TcgaCnvParser.get_tcga_cnv(genes_of_interest=eif_genes)
+  all_threshold_data = TcgaCnvParser.get_tcga_cnv()
+  # TODO(dlroxe): probably just eliminate 'genes_of_interest' from the
+  # get_tcga_cnv() function; there doesn't seem to be much point considering the flexibility
+  # we have here with the [] operator.
+  # eif_threshold_data = TcgaCnvParser.get_tcga_cnv(genes_of_interest=eif_genes)
+  eif_threshold_data = all_threshold_data[eif_genes]
   print(f'eif threshold data\n{eif_threshold_data}')
+
+  merged_phenotyped_data = TcgaCnvParser.merge_cnv_phenotypes(all_threshold_data)
+  print(f'all threshold data, merged with phenotypes:\n{merged_phenotyped_data}')
 
 
 if __name__ == "__main__":
