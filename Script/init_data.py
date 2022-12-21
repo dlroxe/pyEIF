@@ -4,14 +4,20 @@ Read and parse raw data related to the pyEIF project.
 
 This file may be imported as a module or run as a stand-alone executable.
 
-This code relies upon Googles 'ABSL' ('Abseil') libraries.  Among other things, these provide a mechanism to define
-command-line flags.  So, for example, this file may be executed in the following manner:
+The program requires data, which should be separately downloaded into a
+data directory.  The data location may be specified by a command-line flag.
 
 ./init_data.py --data_directory=~/Desktop/pyeif_data
 
 For a description of available flags, execute with the --help option:
 
 ./init_data.py --help
+
+This will show additional options, such as a way to specify names of
+individual data files.  Typically, it should not be necessary to specify
+them, because by default the program references files using the same
+names they are given in the repositories where they are officially
+maintained.
 
 """
 from absl import app
@@ -23,116 +29,128 @@ import pandas
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string('data_directory', '~/Desktop/pyeif_data', 'parent dir for data files')
+flags.DEFINE_string('cnv_data_by_gene_values', 'Gistic2_CopyNumber_Gistic2_all_data_by_genes',
+                    'the path, relative to data_directory, where raw data values can be '
+                    'found for tissue samples with gene copy numbers.')
+flags.DEFINE_string('cnv_data_by_gene_thresholds', 'Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes',
+                    'the path, relative to data_directory, where threshold data values can be '
+                    'found for tissue samples with gene copy numbers.  These values are constrained to be integers '
+                    'in the range [-2, 2].')
+flags.DEFINE_string('cnv_data_phenotypes', 'TCGA_phenotype_denseDataOnlyDownload.tsv',
+                    'the path, relative to data_directory, where phenotype data can be '
+                    'found for tissue samples named in cnv_data_by_gene_values and '
+                    'cnv_data_by_gene_thresholds.')
 
 
 class TcgaCnvParser:
-  """
-  Methods and configuration settings for parsing TCGA CNV data.
-  """
-
-  # This variable is left public because it encodes the implicit meaning for the values
-  # in Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes.
-  cnv_code_mappings = {
-    2.0: 'AMP',
-    1.0: 'DUP',
-    0.0: 'DIPLOID',
-    -1.0: 'DEL',
-    -2.0: 'HOMDEL',
-  }
-
-  def __init__(self):
-    pass
-
-  @classmethod
-  def get_tcga_cnv_value(cls, raw_data_file: Optional[str] = None) -> pandas.DataFrame:
     """
-    Reads raw_data_file and returns a related dataframe.
-
-    The input file contains raw data in the following form:
-
-                                 TCGA-A5-A0GI-01  TCGA-S9-A7J2-01  TCGA-06-0150-01  ...   TCGA-DD-A115-01
-    Sample                                                                          ...
-    ACAP3                                  0.0             -1.0              0.0    ...             0.0
-    ACTRT2                                 0.0             -1.0              0.0    ...             0.0
-    AGRN                                   0.0             -1.0              0.0    ...             0.0
-    ANKRD65                                0.0             -1.0              0.0    ...             0.0
-    ATAD3A                                 0.0             -1.0              0.0    ...             0.0
-
-    The rows are genes, and the columns are samples.  This function transposes the data and selects certain genes.
-    For example, for certain EIF genes, it returns a dataframe of this form:
-
-    Sample          EIF4G1 EIF3E EIF3H
-    TCGA-A5-A0GI-01    0.0   0.0   0.0
-    TCGA-S9-A7J2-01    0.0   0.0   0.0
-    TCGA-06-0150-01    0.0   0.0   0.0
-    ...                ...   ...   ...
-    TCGA-DD-A115-01    0.0  -1.0  -1.0
-
-    :param raw_data_file: the name of a file (relative to the configured data directory) containing raw data
-    :return: a data frame with samples as rows and selected genes as columns
-     (or all genes, if genes_of_interest is None).
+    Methods and configuration settings for parsing TCGA CNV data.
     """
-    return datatable.fread(file=os.path.join(FLAGS.data_directory, raw_data_file)
-                         ).to_pandas().sort_values(by=['Sample']).set_index('Sample').transpose()
 
-  @classmethod
-  def get_tcga_cnv(cls, values_data_frame: Optional[datatable.Frame] = None) -> pandas.DataFrame:
-    """
-    Returns the output of get_tcga_cnv_value(), but with numeric cell values replaced by labels.
+    # This variable is left public because it encodes the implicit meaning for the values
+    # in Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes.
+    cnv_code_mappings = {
+        2.0: 'AMP',
+        1.0: 'DUP',
+        0.0: 'DIPLOID',
+        -1.0: 'DEL',
+        -2.0: 'HOMDEL',
+    }
 
-    Sample output for a selection of EIF genes:
+    def __init__(self):
+        pass
 
-    Sample            EIF4G1    EIF3E    EIF3H
-    TCGA-A5-A0GI-01  DIPLOID  DIPLOID  DIPLOID
-    TCGA-S9-A7J2-01  DIPLOID  DIPLOID  DIPLOID
-    TCGA-06-0150-01  DIPLOID  DIPLOID  DIPLOID
-    ...                  ...      ...      ...
-    TCGA-DD-A115-01  DIPLOID      DEL      DEL
+    @classmethod
+    def get_tcga_cnv_value(cls, raw_data_file: Optional[str] = None) -> pandas.DataFrame:
+        """
+        Reads raw_data_file and returns a related dataframe.
 
-    :param values_data_frame: if None, then the function uses the value
-           returned by get_tcga_cnv_value('Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes', genes_of_interest)
-    :return: a data frame with samples as rows, selected genes as columns, and string labels as cell values.
-    """
-    # Note the .replace() call.  It just applies the dictionary, and is very quick.
-    return values_data_frame or cls.get_tcga_cnv_value(
-      raw_data_file='Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes',
-      genes_of_interest=genes_of_interest).replace(cls.cnv_code_mappings)
+        The input file contains raw data in the following form:
 
-  # TODO(dlroxe): Probably it's worth documenting the join() semantics more carefully, particularly regarding the
-  # indices, in merge_cnv_phenotypes().
-  @classmethod
-  def merge_cnv_phenotypes(cls, cnv_data: Optional[pandas.DataFrame] = None) -> pandas.DataFrame:
-    """
-    Merges TCGA phenotype data, specifically 'sample type' and 'primary disease', with CNV data.
+                                     TCGA-A5-A0GI-01  TCGA-S9-A7J2-01  TCGA-06-0150-01  ...   TCGA-DD-A115-01
+        Sample                                                                          ...
+        ACAP3                                  0.0             -1.0              0.0    ...             0.0
+        ACTRT2                                 0.0             -1.0              0.0    ...             0.0
+        AGRN                                   0.0             -1.0              0.0    ...             0.0
+        ANKRD65                                0.0             -1.0              0.0    ...             0.0
+        ATAD3A                                 0.0             -1.0              0.0    ...             0.0
 
-    For example, CNV data might include this row:
+        The rows are genes, and the columns are samples.  This function transposes the data and selects certain genes.
+        For example, for certain EIF genes, it returns a dataframe of this form:
 
-    Sample          7SK|ENSG00000232512.2 7SK|ENSG00000249352.3 7SK|ENSG00000254144.2  ... snoZ6|ENSG00000264452.1 snoZ6|ENSG00000266692.1 snosnR66
-    TCGA-A5-A0GI-01               DIPLOID               DIPLOID               DIPLOID  ...                 DIPLOID                 DIPLOID  DIPLOID
+        Sample          EIF4G1 EIF3E EIF3H
+        TCGA-A5-A0GI-01    0.0   0.0   0.0
+        TCGA-S9-A7J2-01    0.0   0.0   0.0
+        TCGA-06-0150-01    0.0   0.0   0.0
+        ...                ...   ...   ...
+        TCGA-DD-A115-01    0.0  -1.0  -1.0
 
-    Phenotype data might include this row:
+        :param raw_data_file: the name of a file (relative to the configured data directory) containing raw data
+        :return: a data frame with samples as rows.
+        """
+        return datatable.fread(file=os.path.join(FLAGS.data_directory, raw_data_file)
+                               ).to_pandas().sort_values(by=['Sample']).set_index('Sample').transpose()
 
-                       sample.type                        primary_disease
-    Sample
-    TCGA-A5-A0GI-01  Primary Tumor  uterine corpus endometrioid carcinoma
+    @classmethod
+    def get_tcga_cnv(cls, values_data_frame: Optional[datatable.Frame] = None) -> pandas.DataFrame:
+        """
+        Returns the output of get_tcga_cnv_value(), but with numeric cell values replaced by labels.
 
-    The merged data would look like this:
+        Sample output for a selection of EIF genes:
 
-                    7SK|ENSG00000232512.2 7SK|ENSG00000249352.3 7SK|ENSG00000254144.2  ... snosnR66    sample.type                        primary_disease
-    TCGA-A5-A0GI-01               DIPLOID               DIPLOID               DIPLOID  ...  DIPLOID  Primary Tumor  uterine corpus endometrioid carcinoma
+        Sample            EIF4G1    EIF3E    EIF3H
+        TCGA-A5-A0GI-01  DIPLOID  DIPLOID  DIPLOID
+        TCGA-S9-A7J2-01  DIPLOID  DIPLOID  DIPLOID
+        TCGA-06-0150-01  DIPLOID  DIPLOID  DIPLOID
+        ...                  ...      ...      ...
+        TCGA-DD-A115-01  DIPLOID      DEL      DEL
+
+        :param values_data_frame: if None, then the function uses the value
+               returned by get_tcga_cnv_value('Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes')
+        :return: a data frame with samples as rows, selected genes as columns, and string labels as cell values.
+        """
+        # Note the .replace() call.  It just applies the dictionary, and is very quick.
+        return values_data_frame or cls.get_tcga_cnv_value(
+            raw_data_file=FLAGS.cnv_data_by_gene_thresholds).replace(cls.cnv_code_mappings)
+
+    # TODO(dlroxe): Probably it's worth documenting the join() semantics more carefully, particularly regarding the
+    # indices, in merge_cnv_phenotypes().
+    @classmethod
+    def merge_cnv_phenotypes(cls, cnv_data: Optional[pandas.DataFrame] = None) -> pandas.DataFrame:
+        """
+        Merges TCGA phenotype data, specifically 'sample type' and 'primary disease', with CNV data.
+
+        For example, CNV data might include this row:
+
+        Sample          7SK|ENSG00000232512.2 7SK|ENSG00000249352.3 7SK|ENSG00000254144.2  ... snoZ6|ENSG00000264452.1 snoZ6|ENSG00000266692.1 snosnR66
+        TCGA-A5-A0GI-01               DIPLOID               DIPLOID               DIPLOID  ...                 DIPLOID                 DIPLOID  DIPLOID
+
+        Phenotype data might include this row:
+
+                           sample.type                        primary_disease
+        Sample
+        TCGA-A5-A0GI-01  Primary Tumor  uterine corpus endometrioid carcinoma
+
+        The merged data would look like this:
+
+                        7SK|ENSG00000232512.2 7SK|ENSG00000249352.3 7SK|ENSG00000254144.2  ... snosnR66    sample.type                        primary_disease
+        TCGA-A5-A0GI-01               DIPLOID               DIPLOID               DIPLOID  ...  DIPLOID  Primary Tumor  uterine corpus endometrioid carcinoma
 
 
-    :param cnv_data: a dataframe obtained from get_tcga_cnv() or get_tcga_value()
-    :return: a merged dataframe that combines CNV value/threshold data with CNV phenotype data.
-    """
-    cnv = TcgaCnvParser.get_tcga_cnv() if cnv_data is None else cnv_data
+        :param cnv_data: a dataframe obtained from get_tcga_cnv() or get_tcga_value()
+        :return: a merged dataframe that combines CNV value/threshold data with CNV phenotype data.
+        """
+        cnv = TcgaCnvParser.get_tcga_cnv() if cnv_data is None else cnv_data
 
-    phenotypes = datatable.fread(file=os.path.join(FLAGS.data_directory, 'TCGA_phenotype_denseDataOnlyDownload.tsv')
-                                 ).to_pandas()[['sample', 'sample_type', '_primary_disease']].rename(
-      columns={'sample': 'Sample', 'sample_type': 'sample.type', '_primary_disease': 'primary_disease'}).sort_values(
-      by=['Sample']).set_index('Sample')
+        phenotypes = datatable.fread(file=os.path.join(FLAGS.data_directory, FLAGS.cnv_data_phenotypes)
+                                     ).to_pandas()[['sample', 'sample_type', '_primary_disease']].rename(
+            columns={
+                'sample': 'Sample',
+                'sample_type': 'sample.type',
+                '_primary_disease': 'primary_disease',
+            }).sort_values(by=['Sample']).set_index('Sample')
 
-    return cnv.join(phenotypes, how='inner')
+        return cnv.join(phenotypes, how='inner')
 
 
 # TODO(dlroxe): most code below this point is commented-out with docstring-style quotes, until it can be
@@ -140,31 +158,31 @@ class TcgaCnvParser:
 # structure, as well.
 
 def get_top_genes(df, label, percent):
-  pass
+    pass
+    """
+    sample_number <- nrow(df)
+  
+    TOP_AMP <- df %>%
+      tibble::rownames_to_column(var = "rowname") %>%
+      reshape2::melt(id.vars = "rowname", variable.name = "Gene") %>%
+      dplyr::filter(value %in% label) %>%
+      dplyr::group_by(Gene) %>%
+      dplyr::summarise(Percent = n() / sample_number * 100) %>%
+      dplyr::filter(Percent > percent) %>%
+      droplevels() %>%
+      dplyr::mutate(entrez = AnnotationDbi::mapIds(org.Hs.eg.db,
+                                                   keys = as.character(.data$Gene),
+                                                   column = "ENTREZID",
+                                                   keytype = "SYMBOL",
+                                                   multiVals = "first"
+      ))
+    return(TOP_AMP)
+  }
   """
-  sample_number <- nrow(df)
-
-  TOP_AMP <- df %>%
-    tibble::rownames_to_column(var = "rowname") %>%
-    reshape2::melt(id.vars = "rowname", variable.name = "Gene") %>%
-    dplyr::filter(value %in% label) %>%
-    dplyr::group_by(Gene) %>%
-    dplyr::summarise(Percent = n() / sample_number * 100) %>%
-    dplyr::filter(Percent > percent) %>%
-    droplevels() %>%
-    dplyr::mutate(entrez = AnnotationDbi::mapIds(org.Hs.eg.db,
-                                                 keys = as.character(.data$Gene),
-                                                 column = "ENTREZID",
-                                                 keytype = "SYMBOL",
-                                                 multiVals = "first"
-    ))
-  return(TOP_AMP)
-}
-"""
 
 
 def coocurrance_analysis(df, gene01, gene02, cnv_1, cnv_2):
-  pass
+    pass
 
 
 """
@@ -286,18 +304,18 @@ coocurrance_analysis(df = TCGA_CNV,
 
 
 def main(argv):
-  eif_genes = ["EIF4G1", "EIF3E", "EIF3H", ]
+    eif_genes = ["EIF4G1", "EIF3E", "EIF3H", ]
 
-  all_data = TcgaCnvParser.get_tcga_cnv_value(raw_data_file='Gistic2_CopyNumber_Gistic2_all_data_by_genes')
-  print(f'all data\n{all_data}')
+    all_data = TcgaCnvParser.get_tcga_cnv_value(raw_data_file=FLAGS.all_data_by_genes)
+    print(f'all data\n{all_data}')
 
-  all_threshold_data = TcgaCnvParser.get_tcga_cnv()
-  eif_threshold_data = all_threshold_data[eif_genes]
-  print(f'eif threshold data\n{eif_threshold_data}')
+    all_threshold_data = TcgaCnvParser.get_tcga_cnv()
+    eif_threshold_data = all_threshold_data[eif_genes]
+    print(f'eif threshold data\n{eif_threshold_data}')
 
-  merged_phenotyped_data = TcgaCnvParser.merge_cnv_phenotypes(all_threshold_data)
-  print(f'all threshold data, merged with phenotypes:\n{merged_phenotyped_data}')
+    merged_phenotyped_data = TcgaCnvParser.merge_cnv_phenotypes(all_threshold_data)
+    print(f'all threshold data, merged with phenotypes:\n{merged_phenotyped_data}')
 
 
 if __name__ == "__main__":
-  app.run(main)
+    app.run(main)
