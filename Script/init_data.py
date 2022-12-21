@@ -43,15 +43,8 @@ class TcgaCnvParser:
   def __init__(self):
     pass
 
-  # TODO(dlroxe): Probably eliminate 'genes_of_interest' as a parameter from the next two functions.
-  # It's very easy for the caller to simply apply the [] operator to achieve the desired result, without
-  # impacting the signatures and documentation of these functions.  Furthermore, these functions are now
-  # quick enough for the full dataset that the ability to specify a subset when the function is called
-  # doesn't provide a compelling performance benefit, either.
-
   @classmethod
-  def get_tcga_cnv_value(cls, raw_data_file: Optional[str] = None,
-                         genes_of_interest: Optional[List[str]] = None) -> pandas.DataFrame:
+  def get_tcga_cnv_value(cls, raw_data_file: Optional[str] = None) -> pandas.DataFrame:
     """
     Reads raw_data_file and returns a related dataframe.
 
@@ -75,20 +68,15 @@ class TcgaCnvParser:
     ...                ...   ...   ...
     TCGA-DD-A115-01    0.0  -1.0  -1.0
 
-    If genes_of_interest is None, then no filtering of the columns is performed (i.e. all genes will be selected).
-
     :param raw_data_file: the name of a file (relative to the configured data directory) containing raw data
-    :param genes_of_interest: a list of genes; in this example ['EIF4G1', 'EIF3E', 'EIF3H'], or None
     :return: a data frame with samples as rows and selected genes as columns
      (or all genes, if genes_of_interest is None).
     """
-    df = datatable.fread(file=os.path.join(FLAGS.data_directory, raw_data_file)
+    return datatable.fread(file=os.path.join(FLAGS.data_directory, raw_data_file)
                          ).to_pandas().sort_values(by=['Sample']).set_index('Sample').transpose()
-    return df[genes_of_interest] if genes_of_interest else df
 
   @classmethod
-  def get_tcga_cnv(cls, genes_of_interest: Optional[str] = None,
-                   values_data_frame: Optional[datatable.Frame] = None) -> pandas.DataFrame:
+  def get_tcga_cnv(cls, values_data_frame: Optional[datatable.Frame] = None) -> pandas.DataFrame:
     """
     Returns the output of get_tcga_cnv_value(), but with numeric cell values replaced by labels.
 
@@ -101,7 +89,6 @@ class TcgaCnvParser:
     ...                  ...      ...      ...
     TCGA-DD-A115-01  DIPLOID      DEL      DEL
 
-    :param genes_of_interest: a list of genes (in this example ['EIF4G1', 'EIF3E', 'EIF3H']), or 'None' for all genes
     :param values_data_frame: if None, then the function uses the value
            returned by get_tcga_cnv_value('Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes', genes_of_interest)
     :return: a data frame with samples as rows, selected genes as columns, and string labels as cell values.
@@ -305,10 +292,6 @@ def main(argv):
   print(f'all data\n{all_data}')
 
   all_threshold_data = TcgaCnvParser.get_tcga_cnv()
-  # TODO(dlroxe): probably just eliminate 'genes_of_interest' from the
-  # get_tcga_cnv() function; there doesn't seem to be much point considering the flexibility
-  # we have here with the [] operator.
-  # eif_threshold_data = TcgaCnvParser.get_tcga_cnv(genes_of_interest=eif_genes)
   eif_threshold_data = all_threshold_data[eif_genes]
   print(f'eif threshold data\n{eif_threshold_data}')
 
