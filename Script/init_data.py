@@ -160,28 +160,28 @@ class TcgaCnvParser:
 # translated from R to Python.  After that is done, it probably should/will be reorganized into a class
 # structure, as well.
 
-def get_top_genes(df, label, percent):
-  pass
-  """
-  sample_number <- nrow(df)
-
-  TOP_AMP <- df %>%
-    tibble::rownames_to_column(var = "rowname") %>%
-    reshape2::melt(id.vars = "rowname", variable.name = "Gene") %>%
-    dplyr::filter(value %in% label) %>%
-    dplyr::group_by(Gene) %>%
-    dplyr::summarise(Percent = n() / sample_number * 100) %>%
-    dplyr::filter(Percent > percent) %>%
-    droplevels() %>%
-    dplyr::mutate(entrez = AnnotationDbi::mapIds(org.Hs.eg.db,
-                                                 keys = as.character(.data$Gene),
-                                                 column = "ENTREZID",
-                                                 keytype = "SYMBOL",
-                                                 multiVals = "first"
-    ))
-  return(TOP_AMP)
-}
-"""
+def get_top_genes(df: pandas.DataFrame, labels: List[str], percent: int):
+  sample_number = len(df.index)
+  df.index.name = 'rowname'
+  return (  # Extra outer parens here permit easy formatting that starts each chained function call on its own line.
+    df.reset_index()
+    .melt(id_vars=['rowname'], var_name='Gene', value_name='Value', ignore_index=True)
+    .set_index('rowname')
+    .loc[lambda x: x['Value'].isin(labels)]
+    .groupby(by='Gene')
+    .count()
+    .apply(lambda x: 100 * x / sample_number)
+    .loc[lambda x: x['Value'] > percent]
+  )
+  # TODO(dlroxe): equivalent of:
+  '''
+  dplyr::mutate(entrez = AnnotationDbi::mapIds(org.Hs.eg.db,
+                                                   keys = as.character(.data$Gene),
+                                                   column = "ENTREZID",
+                                                   keytype = "SYMBOL",
+                                                   multiVals = "first"
+      ))
+  '''
 
 
 def coocurrance_analysis(df, gene01, gene02, cnv_1, cnv_2):

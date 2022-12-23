@@ -53,9 +53,30 @@ class UnitTests(absltest.TestCase):
     self.assertTrue(joined_data.equals(expected_joined_data),
                     msg=joined_data.compare(expected_joined_data))
 
-  '''
-                         sample.type                        primary_disease
-    Sample
-    TCGA-A5-A0GI-01  Primary Tumor  uterine corpus endometrioid carcinoma
+  def test_top_genes(self):
+    threshold_data = pandas.DataFrame({
+      'Sample': ['gene1', 'gene2', 'gene3', 'gene4', 'gene5'],
+      'TCGA-A5-A0GI-01': ['AMP', 'DIPLOID', 'DIPLOID', 'DIPLOID', 'DUP'],
+      'TCGA-S9-A7J2-01': ['HOMDEL', 'DEL', 'DEL', 'DEL', 'DEL'],
+      'TCGA-06-0150-01': ['DIPLOID', 'DIPLOID', 'DIPLOID', 'DIPLOID', 'DIPLOID'],
+    }).set_index('Sample').transpose()
+    top_genes01 = init_data.get_top_genes(threshold_data, labels=['AMP'], percent=30)
+    top_genes02 = init_data.get_top_genes(threshold_data, labels=['AMP'], percent=40)
+    top_genes03 = init_data.get_top_genes(threshold_data, labels=['AMP', 'DUP'], percent=30)
+    top_genes04 = init_data.get_top_genes(threshold_data, labels=['AMP', 'DUP'], percent=40)
+    top_genes05 = init_data.get_top_genes(threshold_data, labels=['AMP', 'DIPLOID', 'DUP'], percent=30)
+    top_genes06 = init_data.get_top_genes(threshold_data, labels=['AMP', 'DIPLOID', 'DUP'], percent=60)
+    top_genes07 = init_data.get_top_genes(threshold_data, labels=['AMP', 'DIPLOID', 'DUP'], percent=70)
+    top_genes08 = init_data.get_top_genes(threshold_data, labels=['DIPLOID'], percent=30)
+    top_genes09 = init_data.get_top_genes(threshold_data, labels=['DIPLOID'], percent=60)
 
-  '''
+    # TODO(dlroxe): These are simple assertions about counts.  Add specific tests of gene names and percentages.
+    self.assertEqual(len(top_genes01), 1, msg=str(top_genes01))
+    self.assertEqual(len(top_genes02), 0, msg=str(top_genes02))
+    self.assertEqual(len(top_genes03), 2, msg=str(top_genes03))
+    self.assertEqual(len(top_genes04), 0, msg=str(top_genes04))
+    self.assertEqual(len(top_genes05), 5, msg=str(top_genes05))
+    self.assertEqual(len(top_genes06), 5, msg=str(top_genes06))
+    self.assertEqual(len(top_genes07), 0, msg=str(top_genes07))
+    self.assertEqual(len(top_genes08), 5, msg=str(top_genes08))
+    self.assertEqual(len(top_genes09), 3, msg=str(top_genes06))
