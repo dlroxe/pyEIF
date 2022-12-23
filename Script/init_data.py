@@ -117,7 +117,8 @@ class TcgaCnvParser:
   # TODO(dlroxe): Probably it's worth documenting the join() semantics more carefully, particularly regarding the
   # indices, in merge_cnv_phenotypes().
   @classmethod
-  def merge_cnv_phenotypes(cls, cnv_data: Optional[pandas.DataFrame] = None) -> pandas.DataFrame:
+  def merge_cnv_phenotypes(cls, cnv_data: Optional[pandas.DataFrame] = None,
+                           phenotype_data: Optional[pandas.DataFrame] = None) -> pandas.DataFrame:
     """
     Merges TCGA phenotype data, specifically 'sample type' and 'primary disease', with CNV data.
 
@@ -143,15 +144,16 @@ class TcgaCnvParser:
     """
     cnv = TcgaCnvParser.get_tcga_cnv() if cnv_data is None else cnv_data
 
-    phenotypes = datatable.fread(file=os.path.join(FLAGS.data_directory, FLAGS.cnv_data_phenotypes)
-                                 ).to_pandas()[['sample', 'sample_type', '_primary_disease']].rename(
-      columns={
-        'sample': 'Sample',
-        'sample_type': 'sample.type',
-        '_primary_disease': 'primary_disease',
-      }).sort_values(by=['Sample']).set_index('Sample')
+    if phenotype_data is None:
+      phenotype_data = datatable.fread(file=os.path.join(FLAGS.data_directory, FLAGS.cnv_data_phenotypes)
+                                       ).to_pandas()[['sample', 'sample_type', '_primary_disease']].rename(
+        columns={
+          'sample': 'Sample',
+          'sample_type': 'sample.type',
+          '_primary_disease': 'primary_disease',
+        }).sort_values(by=['Sample']).set_index('Sample')
 
-    return cnv.join(phenotypes, how='inner')
+    return cnv.join(phenotype_data, how='inner')
 
 
 # TODO(dlroxe): most code below this point is commented-out with docstring-style quotes, until it can be
