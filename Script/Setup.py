@@ -19,6 +19,7 @@ import sklearn.cluster
 import sklearn.decomposition 
 import subprocess
 
+import heatmap_grammar
 
 # critical parameter setting!
 matplotlib.rcParams["pdf.fonttype"] = 42

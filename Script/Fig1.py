@@ -44,7 +44,7 @@ def cnv_combined_freq_plot(df, cnv):
     matplotlib.pyplot.legend(prop={'size': 16}, title = 'CNV')
     matplotlib.pyplot.title('Density plot of CNV status in TCGA samples')
     matplotlib.pyplot.xlabel('CNV frequency in all tumors')
-    matplotlib.pyplot.ylabel("Probability (%)")
+    matplotlib.pyplot.ylabel("Probability density (%)")
     matplotlib.pyplot.savefig(os.path.join(os.path.expanduser(output_directory), "Fig1", ("gain density plot.pdf")),
                               dpi=300,
                               edgecolor='w',
@@ -90,7 +90,7 @@ def cnv_freq_plot(df, cnv, cutoff):
     matplotlib.pyplot.axvline(x=cutoff, linewidth=2, linestyle='--')
     matplotlib.pyplot.title("Density plot of "+str(cnv)+" status in TCGA samples")
     matplotlib.pyplot.xlabel(str(cnv)+" frequency in all tumors")
-    matplotlib.pyplot.ylabel("Probability (%)")
+    matplotlib.pyplot.ylabel("Probability density (%)")
     matplotlib.pyplot.savefig(os.path.join(os.path.expanduser(output_directory), 
                                            "Fig1", 
                                            (cnv + "_density plot.pdf")),
