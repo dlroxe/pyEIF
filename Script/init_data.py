@@ -26,9 +26,11 @@ from typing import List, Optional
 import datatable
 import os
 import pandas
+from scipy import stats
 
 FLAGS = flags.FLAGS
-flags.DEFINE_string('data_directory', '~/Desktop/pyeif_data', 'parent dir for data files')
+flags.DEFINE_string('data_directory', os.path.join('~', 'Desktop', 'pyeif_data'), 'parent dir for data files')
+flags.DEFINE_string('output_directory', os.path.join('~', 'Desktop', 'pyeif_output'), 'parent dir for output')
 flags.DEFINE_string('cnv_data_by_gene_values', 'Gistic2_CopyNumber_Gistic2_all_data_by_genes',
                     'the path, relative to data_directory, where raw data values can be '
                     'found for tissue samples with gene copy numbers.')
@@ -155,38 +157,63 @@ class TcgaCnvParser:
 
     return cnv.join(phenotype_data, how='inner')
 
+  @classmethod
+  def get_top_genes(cls, df: pandas.DataFrame, labels: List[str], percent: int) -> pandas.DataFrame:
+    sample_number = len(df.index)
+    df.index.name = 'rowname'
+    return (  # Extra outer parens here permit easy formatting that starts each chained function call on its own line.
+      df.reset_index()
+      .melt(id_vars=['rowname'], var_name='Gene', value_name='Value', ignore_index=True)
+      .set_index('rowname')
+      .loc[lambda x: x['Value'].isin(labels)]
+      .groupby(by='Gene')
+      .count()
+      .apply(lambda x: 100 * x / sample_number)
+      .loc[lambda x: x['Value'] > percent]
+    )
+    # TODO(dlroxe): equivalent of:
+    '''
+    dplyr::mutate(entrez = AnnotationDbi::mapIds(org.Hs.eg.db,
+                                                     keys = as.character(.data$Gene),
+                                                     column = "ENTREZID",
+                                                     keytype = "SYMBOL",
+                                                     multiVals = "first"
+        ))
+    '''
+
+  @classmethod
+  def coocurrance_analysis(cls, df: pandas.DataFrame, gene01: str, gene02: str, cnv_1: str, cnv_2: str) -> None:
+    new_gene01 = cls._rename_gene(gene01, cnv_1, cnv_2)
+    new_gene02 = cls._rename_gene(gene02, cnv_1, cnv_2)
+
+    eif = df[[gene01, gene02]]  # TODO(dlroxe): mimic "all_of()", i.e. error unless both genes are in df
+    eif.assign(new_gene01=lambda x: x[gene01])
+    eif.assign(new_gene02=lambda x: x[gene02])
+    eif = eif[[new_gene01, new_gene02]]
+
+    file_name = os.path.join(FLAGS.output_directory, "Fig1", gene01 + gene02 + cnv_1 + cnv_2 + '.xlsx')
+
+    odds_ratio, p_value = stats.fisher_exact(eif, alternative='greater')
+    fisher = pandas.DataFrame(data={'Odds Ratio': [odds_ratio], 'P Value': [p_value]})
+
+    chi_sq, p_value = stats.chisquare(eif[new_gene01], eif[new_gene02])
+    chi_test = pandas.DataFrame(data={'Chi-Squared': [chi_sq], 'P Value': [p_value]})
+
+    with pandas.ExcelWriter(file_name) as writer:
+      eif.to_excel(writer, sheet_name='1')  # TODO(dlroxe): rownames=True
+      fisher.to_excel(writer, sheet_name='Fisheroneside')  # TODO(dlroxe): rownames=False
+      chi_test.to_excel(writer, sheet_name='chi_test')  # TODO(dlroxe): rownames=False
+
+  @classmethod
+  def _rename_gene(cls, gene: str, cnv_1: str, cnv_2: str) -> str:
+    """Returns a name based on 'gene' and the CNV parameters."""
+    modifier = '' if gene in (cnv_1, cnv_2) else 'NO'
+    return gene + modifier + cnv_1 + cnv_2
+
 
 # TODO(dlroxe): most code below this point is commented-out with docstring-style quotes, until it can be
 # translated from R to Python.  After that is done, it probably should/will be reorganized into a class
 # structure, as well.
-
-def get_top_genes(df: pandas.DataFrame, labels: List[str], percent: int):
-  sample_number = len(df.index)
-  df.index.name = 'rowname'
-  return (  # Extra outer parens here permit easy formatting that starts each chained function call on its own line.
-    df.reset_index()
-    .melt(id_vars=['rowname'], var_name='Gene', value_name='Value', ignore_index=True)
-    .set_index('rowname')
-    .loc[lambda x: x['Value'].isin(labels)]
-    .groupby(by='Gene')
-    .count()
-    .apply(lambda x: 100 * x / sample_number)
-    .loc[lambda x: x['Value'] > percent]
-  )
-  # TODO(dlroxe): equivalent of:
-  '''
-  dplyr::mutate(entrez = AnnotationDbi::mapIds(org.Hs.eg.db,
-                                                   keys = as.character(.data$Gene),
-                                                   column = "ENTREZID",
-                                                   keytype = "SYMBOL",
-                                                   multiVals = "first"
-      ))
-  '''
-
-
-def coocurrance_analysis(df, gene01, gene02, cnv_1, cnv_2):
-  pass
-
 
 """
 coocurrance_analysis <- function(df, gene01, gene02, cnv_1, cnv_2) {
@@ -226,7 +253,9 @@ coocurrance_analysis <- function(df, gene01, gene02, cnv_1, cnv_2) {
   sheetName = "chitest", append = TRUE, row.names = FALSE
   )
 }
+"""
 
+"""
 ## function calling ============================================================
 #
 xlsx::write.xlsx2(get_top_genes(df = TCGA_CNV, label = "AMP", 5),
@@ -309,7 +338,7 @@ coocurrance_analysis(df = TCGA_CNV,
 def main(argv):
   eif_genes = ["EIF4G1", "EIF3E", "EIF3H", ]
 
-  all_data = TcgaCnvParser.get_tcga_cnv_value(raw_data_file=FLAGS.all_data_by_genes)
+  all_data = TcgaCnvParser.get_tcga_cnv_value(raw_data_file=FLAGS.cnv_data_by_gene_values)
   print(f'all data\n{all_data}')
 
   raw_threshold_data = TcgaCnvParser.get_tcga_cnv_value(raw_data_file=FLAGS.cnv_data_by_gene_thresholds)
@@ -320,6 +349,46 @@ def main(argv):
   merged_phenotyped_data = TcgaCnvParser.merge_cnv_phenotypes(all_threshold_data)
   print(f'all threshold data, merged with phenotypes:\n{merged_phenotyped_data}')
 
+  tg1 = TcgaCnvParser.get_top_genes(df=all_threshold_data, labels=["AMP"], percent=5),
+  print(f'top genes 1:\n{tg1}')
+
+  tg2 = TcgaCnvParser.get_top_genes(df=all_threshold_data, labels=["DUP", "AMP"], percent=30)
+  print(f'top genes 2:\n{tg2}')
+
+  tg3 = TcgaCnvParser.get_top_genes(df=all_threshold_data, labels=["HOMDEL"], percent=5)
+  print(f'top genes 3:\n{tg3}')
+
+  # buggy for now
+  """
+  print('attempting coocurrance analysis 1')
+  TcgaCnvParser.coocurrance_analysis(df=all_threshold_data,
+                                     gene01="EIF4G1",
+                                     gene02="EIF3E",
+                                     cnv_1="AMP",
+                                     cnv_2="AMP")
+
+  print('attempting coocurrance analysis 2')
+  TcgaCnvParser.coocurrance_analysis(df=all_threshold_data,
+                                     gene01="EIF4G1",
+                                     gene02="EIF3E",
+                                     cnv_1="AMP",
+                                     cnv_2="DUP")
+
+  print('attempting coocurrance analysis 3')
+  TcgaCnvParser.coocurrance_analysis(df=all_threshold_data,
+                                     gene01="EIF4G1",
+                                     gene02="EIF3H",
+                                     cnv_1="AMP",
+                                     cnv_2="AMP")
+
+  print('attempting coocurrance analysis 4')
+  TcgaCnvParser.coocurrance_analysis(df=all_threshold_data,
+                                     gene01="EIF4G1",
+                                     gene02="EIF3H",
+                                     cnv_1="AMP",
+                                     cnv_2="DUP")
+  """
+  print('processing complete')
 
 if __name__ == "__main__":
   app.run(main)
