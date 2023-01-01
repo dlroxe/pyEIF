@@ -62,14 +62,6 @@ class TcgaCnvParser:
     -2.0: 'HOMDEL',
   }
 
-  reverse_cnv_code_mappings = {
-    'AMP': 2.0,
-    'DUP': 1.0,
-    'DIPLOID': 0.0,
-    'DEL': -1.0,
-    'HOMDEL': -2.0,
-  }
-
   def __init__(self):
     pass
 
@@ -187,45 +179,60 @@ class TcgaCnvParser:
     )
     print(f'top genes:\n{df}')
 
-    def translate_gene_symbol_to_gene_id(gene_symbol: str) -> str:
-      """Returns the Entrez ID for 'gene_symbol', or 'gene_symbol' unaltered if lookup fails."""
+    def translate_gene_symbol_to_gene_id(gene_symbol: str) -> Optional[str]:
+      """Returns the Entrez ID for 'gene_symbol', or None unaltered if lookup fails."""
       # TODO(dlroxe): e.g. '7SK|ENSG00000232512.2' doesn't match any symbol in Hs.data.  For now, such rows
       # are retained with their original names.  Should they be discarded?  Should Entrez identifiers be
       # sought elsewhere?
       key = gene_symbol.split('|')[0]
-      return hs_data_dict[key].gene_id if key in hs_data_dict else gene_symbol
+      return hs_data_dict[key].gene_id if key in hs_data_dict else None
 
-    df['Gene'] = df['Gene'].apply(translate_gene_symbol_to_gene_id)
+    df['entrez'] = df['Gene'].apply(translate_gene_symbol_to_gene_id)
     print(f'top genes (adjusted):\n{df}')
     return df
 
+  # TODO(dlroxe): Fix up the function docstring below.
   @classmethod
-  def coocurrance_analysis(cls, df: pandas.DataFrame, gene01: str, gene02: str, cnv_1: str, cnv_2: str) -> None:
-    def _rename_gene(gene: str) -> str:
-      """Returns a name based on 'gene' and the CNV parameters."""
-      modifier = '' if gene in (cnv_1, cnv_2) else 'NO'
-      return gene + modifier + cnv_1 + cnv_2
+  def cooccurance_analysis(cls, df: pandas.DataFrame, gene01: str, gene02: str, cnv_1: str, cnv_2: str) -> None:
+    """
+    For example, 'sheet 1' should have something like this:
 
-    new_gene01 = _rename_gene(gene01)
-    new_gene02 = _rename_gene(gene02)
-    eif = (
-      df[[gene01, gene02]]  # TODO(dlroxe): mimic "all_of()", i.e. error unless both genes are in df
-      .rename(columns={
-        gene01: new_gene01,
-        gene02: new_gene02,
-      })
-      .transform(lambda x: cls.reverse_cnv_code_mappings[x])
-    )
-    print(f'got adjusted eif\n{eif}')
+                          EIF3H_AMP_DUP    EIF3H_NO_AMP_DUP
+        EIF4G1_AMP_DUP    2220             1233
+        EIF4G1_NO_AMP_DUP 2528             4864
 
-    odds_ratio, p_value = stats.fisher_exact(eif, alternative='greater')
+    That is: 2220 samples are either AMP|DUP for G1, AND ALSO are either AMP|DUP for 3H.
+    """
+    df = df[[gene01, gene02]]
+    allowed = [cnv_1, cnv_2]
+
+    both_cnv_matches = len(df[df[gene01].isin(allowed) & df[gene02].isin(allowed)].index)
+    only_gene01_cnv_matches = len(df[df[gene01].isin(allowed) & ~df[gene02].isin(allowed)].index)
+    only_gene02_cnv_matches = len(df[df[gene02].isin(allowed) & ~df[gene01].isin(allowed)].index)
+    neither_cnv_matches = len(df[~df[gene01].isin(allowed) & ~df[gene02].isin(allowed)].index)
+
+    eif = pandas.DataFrame(
+      data={
+        '_'.join((gene02, cnv_1, cnv_2)): [both_cnv_matches, only_gene02_cnv_matches],
+        '_'.join((gene02, 'NO', cnv_1, cnv_2)): [only_gene01_cnv_matches, neither_cnv_matches],
+      },
+      index=[
+        '_'.join((gene01, cnv_1, cnv_2)),
+        '_'.join((gene01, 'NO', cnv_1, cnv_2)),
+      ])
+
+    print(f'got adjusted counts:\n{eif}\n')
+
+    odds_ratio, p_value = stats.fisher_exact(eif, alternative='greater')  # R version does the counting first
     fisher = pandas.DataFrame(data={'Odds Ratio': [odds_ratio], 'P Value': [p_value]})
+    print(f'got fisher test:\n{fisher}\n')
 
-    chi_sq, p_value = stats.chisquare(eif[new_gene01], eif[new_gene02])
+    chi_sq, p_value = stats.chisquare(eif)
     chi_test = pandas.DataFrame(data={'Chi-Squared': [chi_sq], 'P Value': [p_value]})
+    print(f'got chi-sq test:\n{chi_test}\n')
 
     with pandas.ExcelWriter(
-        path=os.path.join(FLAGS.output_directory, "Fig1", gene01 + gene02 + cnv_1 + cnv_2 + '.xlsx')) as writer:
+        path=os.path.join(FLAGS.output_directory, "Fig1", '_'.join((gene01, gene02, cnv_1, cnv_2)), '.xlsx')) as writer:
       eif.to_excel(writer, sheet_name='1')  # TODO(dlroxe): rownames=True
       fisher.to_excel(writer, sheet_name='Fisheroneside')  # TODO(dlroxe): rownames=False
       chi_test.to_excel(writer, sheet_name='chi_test')  # TODO(dlroxe): rownames=False
@@ -321,17 +328,17 @@ def main(argv):
   print(f'"top genes" analyses are written to {top_genes_base_path}.')
 
   # TODO(dlroxe): The following function calls all crash.  I can't quite discern the intent of the original R code.
-  print('attempting coocurrance analysis 1')
-  TcgaCnvParser.coocurrance_analysis(df=all_threshold_data, gene01="EIF4G1", gene02="EIF3E", cnv_1="AMP", cnv_2="AMP")
+  print('attempting cooccurance analysis 1')
+  TcgaCnvParser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1", gene02="EIF3E", cnv_1="AMP", cnv_2="AMP")
 
   print('attempting coocurrance analysis 2')
-  TcgaCnvParser.coocurrance_analysis(df=all_threshold_data, gene01="EIF4G1", gene02="EIF3E", cnv_1="AMP", cnv_2="DUP")
+  TcgaCnvParser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1", gene02="EIF3E", cnv_1="AMP", cnv_2="DUP")
 
   print('attempting coocurrance analysis 3')
-  TcgaCnvParser.coocurrance_analysis(df=all_threshold_data, gene01="EIF4G1", gene02="EIF3H", cnv_1="AMP", cnv_2="AMP")
+  TcgaCnvParser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1", gene02="EIF3H", cnv_1="AMP", cnv_2="AMP")
 
   print('attempting coocurrance analysis 4')
-  TcgaCnvParser.coocurrance_analysis(df=all_threshold_data, gene01="EIF4G1", gene02="EIF3H", cnv_1="AMP", cnv_2="DUP")
+  TcgaCnvParser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1", gene02="EIF3H", cnv_1="AMP", cnv_2="DUP")
   print('processing complete')
 
 
