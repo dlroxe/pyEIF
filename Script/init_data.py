@@ -18,11 +18,12 @@ individual data files.  Typically, it should not be necessary to specify
 them, because by default the program references files using the same
 names they are given in the repositories where they are officially
 maintained.
-
 """
+
+from Bio import UniGene
 from absl import app
 from absl import flags
-from typing import List, Optional
+from typing import Dict, List, Optional
 import datatable
 import os
 import pandas
@@ -42,6 +43,8 @@ flags.DEFINE_string('cnv_data_phenotypes', 'TCGA_phenotype_denseDataOnlyDownload
                     'the path, relative to data_directory, where phenotype data can be '
                     'found for tissue samples named in cnv_data_by_gene_values and '
                     'cnv_data_by_gene_thresholds.')
+flags.DEFINE_string('hs_data', 'Hs.data', 'unzipped contents of '
+                                          'ftp.ncbi.nih.gov/repository/UniGene/Homo_sapiens/Hs.data.gz')
 
 
 class TcgaCnvParser:
@@ -57,6 +60,14 @@ class TcgaCnvParser:
     0.0: 'DIPLOID',
     -1.0: 'DEL',
     -2.0: 'HOMDEL',
+  }
+
+  reverse_cnv_code_mappings = {
+    'AMP': 2.0,
+    'DUP': 1.0,
+    'DIPLOID': 0.0,
+    'DEL': -1.0,
+    'HOMDEL': -2.0,
   }
 
   def __init__(self):
@@ -90,6 +101,7 @@ class TcgaCnvParser:
     :param raw_data_file: the name of a file (relative to the configured data directory) containing raw data
     :return: a data frame with samples as rows.
     """
+    print(f'reading from {os.path.join(FLAGS.data_directory, raw_data_file)}')
     return datatable.fread(file=os.path.join(FLAGS.data_directory, raw_data_file)
                            ).to_pandas().sort_values(by=['Sample']).set_index('Sample').transpose()
 
@@ -158,10 +170,11 @@ class TcgaCnvParser:
     return cnv.join(phenotype_data, how='inner')
 
   @classmethod
-  def get_top_genes(cls, df: pandas.DataFrame, labels: List[str], percent: int) -> pandas.DataFrame:
+  def get_top_genes(cls, df: pandas.DataFrame, labels: List[str], percent: int,
+                    hs_data_dict: Dict[str, UniGene.Record]) -> pandas.DataFrame:
     sample_number = len(df.index)
     df.index.name = 'rowname'
-    return (  # Extra outer parens here permit easy formatting that starts each chained function call on its own line.
+    df = (  # Extra outer parens here permit easy formatting that starts each chained function call on its own line.
       df.reset_index()
       .melt(id_vars=['rowname'], var_name='Gene', value_name='Value', ignore_index=True)
       .set_index('rowname')
@@ -170,16 +183,21 @@ class TcgaCnvParser:
       .count()
       .apply(lambda x: 100 * x / sample_number)
       .loc[lambda x: x['Value'] > percent]
+      .reset_index()
     )
-    # TODO(dlroxe): equivalent of:
-    '''
-    dplyr::mutate(entrez = AnnotationDbi::mapIds(org.Hs.eg.db,
-                                                     keys = as.character(.data$Gene),
-                                                     column = "ENTREZID",
-                                                     keytype = "SYMBOL",
-                                                     multiVals = "first"
-        ))
-    '''
+    print(f'top genes:\n{df}')
+
+    def translate_gene_symbol_to_gene_id(gene_symbol: str) -> str:
+      """Returns the Entrez ID for 'gene_symbol', or 'gene_symbol' unaltered if lookup fails."""
+      # TODO(dlroxe): e.g. '7SK|ENSG00000232512.2' doesn't match any symbol in Hs.data.  For now, such rows
+      # are retained with their original names.  Should they be discarded?  Should Entrez identifiers be
+      # sought elsewhere?
+      key = gene_symbol.split('|')[0]
+      return hs_data_dict[key].gene_id if key in hs_data_dict else gene_symbol
+
+    df['Gene'] = df['Gene'].apply(translate_gene_symbol_to_gene_id)
+    print(f'top genes (adjusted):\n{df}')
+    return df
 
   @classmethod
   def coocurrance_analysis(cls, df: pandas.DataFrame, gene01: str, gene02: str, cnv_1: str, cnv_2: str) -> None:
@@ -196,6 +214,7 @@ class TcgaCnvParser:
         gene01: new_gene01,
         gene02: new_gene02,
       })
+      .transform(lambda x: cls.reverse_cnv_code_mappings[x])
     )
     print(f'got adjusted eif\n{eif}')
 
@@ -210,6 +229,51 @@ class TcgaCnvParser:
       eif.to_excel(writer, sheet_name='1')  # TODO(dlroxe): rownames=True
       fisher.to_excel(writer, sheet_name='Fisheroneside')  # TODO(dlroxe): rownames=False
       chi_test.to_excel(writer, sheet_name='chi_test')  # TODO(dlroxe): rownames=False
+
+
+# TODO(dlroxe): Hmm, looks like this data started going stale around 2013.  Is there another source (that doesn't
+#               require an active network connection, preferably, so that data can be versioned and archived)?
+#               Hmm, perhaps 'AnnoKey' or something like it could make a cache?
+#               http://bjpop.github.io/annokey/
+#               In particular, perhaps this could be helpful:
+#               get_ncbi_gene_snapshot_xml.py
+# TODO(dlroxe): Move this into the initializer for the class above, and instantiate the class.
+def _init_hs_data() -> Dict[str, UniGene.Record]:
+  # Note, in the version available on Jan 1 2023, the Hs.data file included a typo that made it unparseable.
+  # In particular, "ID Hs.716839" included the line "ACC == D22S272".  There should be only one "=".  Furthermore,
+  # there seems to be a parse error with the last record "no matter what".
+  #
+  # Of course, it should be assumed that such a large set of data will have at least one small error *somewhere*.
+  #
+  # This function includes error-handling logic to make it easy to detect such problems, because the built-in
+  # next() functionality for the generator returned by UniGene.parse() is not sufficiently robust.  How nice it would
+  # be, to just write "for record in UniGene.parse()", but alas it's just too brittle and we can't count on it.  Oh,
+  # well.
+  print('initializing HS data')
+  hs_data_dict = {}
+  # What an absurd incantation to resolve "~" on Windows (which open() can't handle); but OK. Thanks, StackOverflow.
+  hs_file = os.path.abspath(os.path.expanduser(os.path.expandvars(os.path.join(FLAGS.data_directory, FLAGS.hs_data))))
+  hs_records = None
+  with open(hs_file) as raw_hs_data:
+    hs_records = UniGene.parse(raw_hs_data)
+    # Available attributes in each record are documented here:
+    # https://biopython.org/docs/1.76/api/Bio.UniGene.html#Bio.UniGene.Record
+    try:
+      count = 0
+      last_id = ''
+      while True:
+        try:
+          hs_record = next(hs_records)
+          hs_data_dict[hs_record.symbol] = hs_record
+          last_id = hs_record.ID
+          count = count + 1
+        except Exception as ex:
+          print(f'error parsing record {count} (last ID: {last_id}: {ex}')
+          break
+    except StopIteration:
+      print('all HS records consumed')
+  print('HS data initialized')
+  return hs_data_dict
 
 
 def main(argv):
@@ -228,28 +292,35 @@ def main(argv):
 
   # TOP_AMP_PATH, TOP_GAIN_PATH, TOP_HOMDEL_PATH are omitted for the time being,
   # because pathway analysis is harder in Python than in R.
-  top_amp_genes = TcgaCnvParser.get_top_genes(df=all_threshold_data, labels=["AMP"], percent=5)
+  hs_data_dict = _init_hs_data()
+  top_amp_genes = TcgaCnvParser.get_top_genes(df=all_threshold_data, labels=["AMP"], percent=5,
+                                              hs_data_dict=hs_data_dict)
   print(f'top amp genes:\n{top_amp_genes}')
 
-  top_gain_genes = TcgaCnvParser.get_top_genes(df=all_threshold_data, labels=["DUP", "AMP"], percent=30)
+  top_gain_genes = TcgaCnvParser.get_top_genes(df=all_threshold_data, labels=["DUP", "AMP"], percent=30,
+                                               hs_data_dict=hs_data_dict)
   print(f'top gain genes:\n{top_gain_genes}')
 
-  top_homdel_genes = TcgaCnvParser.get_top_genes(df=all_threshold_data, labels=["HOMDEL"], percent=5)
+  top_homdel_genes = TcgaCnvParser.get_top_genes(df=all_threshold_data, labels=["HOMDEL"], percent=5,
+                                                 hs_data_dict=hs_data_dict)
   print(f'top homdel genes:\n{top_homdel_genes}')
 
   top_genes_base_path = os.path.join(FLAGS.output_directory, "Fig1")
   with pandas.ExcelWriter(path=os.path.join(top_genes_base_path, 'TOP_AMP_genes.xlsx')) as writer:
     top_amp_genes.to_excel(writer, sheet_name='1')  # TODO(dlroxe): rownames=True
+    # TODO(dlroxe): add TOP_AMP_PATH to sheet 2
 
   with pandas.ExcelWriter(path=os.path.join(top_genes_base_path, 'TOP_GAIN_genes.xlsx')) as writer:
     top_gain_genes.to_excel(writer, sheet_name='1')  # TODO(dlroxe): rownames=True
+    # TODO(dlroxe): add TOP_GAIN_PATH to sheet 2
 
   with pandas.ExcelWriter(path=os.path.join(top_genes_base_path, 'TOP_HOMDEL_genes.xlsx')) as writer:
     top_homdel_genes.to_excel(writer, sheet_name='1')  # TODO(dlroxe): rownames=True
+    # TODO(dlroxe): add TOP_HOMDEL_PATH to sheet 2
 
   print(f'"top genes" analyses are written to {top_genes_base_path}.')
 
-  # TODO(dlroxe): The following function calls all crash.  I'm can't quite discern the intent of the original R code.
+  # TODO(dlroxe): The following function calls all crash.  I can't quite discern the intent of the original R code.
   print('attempting coocurrance analysis 1')
   TcgaCnvParser.coocurrance_analysis(df=all_threshold_data, gene01="EIF4G1", gene02="EIF3E", cnv_1="AMP", cnv_2="AMP")
 
