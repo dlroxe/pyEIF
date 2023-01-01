@@ -94,7 +94,7 @@ class TcgaCnvParser:
                            ).to_pandas().sort_values(by=['Sample']).set_index('Sample').transpose()
 
   @classmethod
-  def get_tcga_cnv(cls, values_data_frame: Optional[datatable.Frame] = None) -> pandas.DataFrame:
+  def get_tcga_cnv(cls, values_data_frame: Optional[pandas.DataFrame] = None) -> pandas.DataFrame:
     """
     Returns the output of get_tcga_cnv_value(), but with numeric cell values replaced by labels.
 
@@ -183,15 +183,21 @@ class TcgaCnvParser:
 
   @classmethod
   def coocurrance_analysis(cls, df: pandas.DataFrame, gene01: str, gene02: str, cnv_1: str, cnv_2: str) -> None:
-    new_gene01 = cls._rename_gene(gene01, cnv_1, cnv_2)
-    new_gene02 = cls._rename_gene(gene02, cnv_1, cnv_2)
+    def _rename_gene(gene: str) -> str:
+      """Returns a name based on 'gene' and the CNV parameters."""
+      modifier = '' if gene in (cnv_1, cnv_2) else 'NO'
+      return gene + modifier + cnv_1 + cnv_2
 
-    eif = df[[gene01, gene02]]  # TODO(dlroxe): mimic "all_of()", i.e. error unless both genes are in df
-    eif.assign(new_gene01=lambda x: x[gene01])
-    eif.assign(new_gene02=lambda x: x[gene02])
-    eif = eif[[new_gene01, new_gene02]]
-
-    file_name = os.path.join(FLAGS.output_directory, "Fig1", gene01 + gene02 + cnv_1 + cnv_2 + '.xlsx')
+    new_gene01 = _rename_gene(gene01)
+    new_gene02 = _rename_gene(gene02)
+    eif = (
+      df[[gene01, gene02]]  # TODO(dlroxe): mimic "all_of()", i.e. error unless both genes are in df
+      .rename(columns={
+        gene01: new_gene01,
+        gene02: new_gene02,
+      })
+    )
+    print(f'got adjusted eif\n{eif}')
 
     odds_ratio, p_value = stats.fisher_exact(eif, alternative='greater')
     fisher = pandas.DataFrame(data={'Odds Ratio': [odds_ratio], 'P Value': [p_value]})
@@ -199,140 +205,11 @@ class TcgaCnvParser:
     chi_sq, p_value = stats.chisquare(eif[new_gene01], eif[new_gene02])
     chi_test = pandas.DataFrame(data={'Chi-Squared': [chi_sq], 'P Value': [p_value]})
 
-    with pandas.ExcelWriter(file_name) as writer:
+    with pandas.ExcelWriter(
+        path=os.path.join(FLAGS.output_directory, "Fig1", gene01 + gene02 + cnv_1 + cnv_2 + '.xlsx')) as writer:
       eif.to_excel(writer, sheet_name='1')  # TODO(dlroxe): rownames=True
       fisher.to_excel(writer, sheet_name='Fisheroneside')  # TODO(dlroxe): rownames=False
       chi_test.to_excel(writer, sheet_name='chi_test')  # TODO(dlroxe): rownames=False
-
-  @classmethod
-  def _rename_gene(cls, gene: str, cnv_1: str, cnv_2: str) -> str:
-    """Returns a name based on 'gene' and the CNV parameters."""
-    modifier = '' if gene in (cnv_1, cnv_2) else 'NO'
-    return gene + modifier + cnv_1 + cnv_2
-
-
-# TODO(dlroxe): most code below this point is commented-out with docstring-style quotes, until it can be
-# translated from R to Python.  After that is done, it probably should/will be reorganized into a class
-# structure, as well.
-
-"""
-coocurrance_analysis <- function(df, gene01, gene02, cnv_1, cnv_2) {
-  EIF <- df %>%
-    dplyr::select(dplyr::all_of(c(gene01, gene02))) %>%
-    mutate(
-      !!gene01 := ifelse((!!as.name(gene01) == cnv_1 | !!as.name(gene01) == cnv_2),
-        !!paste(gene01, cnv_1, cnv_2),
-        !!paste(gene01, "NO", cnv_1, cnv_2)
-      ),
-      !!gene02 := ifelse((!!as.name(gene02) == cnv_1 | !!as.name(gene02) == cnv_2),
-        !!paste(gene02, cnv_1, cnv_2),
-        !!paste(gene02, "NO", cnv_1, cnv_2)
-      )
-    )
-  file_name <- paste(file.path(output_directory, "Fig1"),
-    "/",
-    gene01,
-    gene02,
-    cnv_1,
-    cnv_2,
-    ".xlsx",
-    sep = ""
-  )
-  xlsx::write.xlsx(as.data.frame.matrix(table(EIF[, gene01], EIF[, gene02])),
-    file = file_name,
-    sheetName = "1", row.names = TRUE
-  )
-  xlsx::write.xlsx(fisher.test(EIF[, gene01], EIF[, gene02], alternative = "greater") %>%
-    broom::tidy(),
-  file = file_name,
-  sheetName = "Fisheroneside", append = TRUE, row.names = FALSE
-  )
-  xlsx::write.xlsx(chisq.test(EIF[, gene01], EIF[, gene02]) %>%
-    broom::tidy(),
-  file = file_name,
-  sheetName = "chitest", append = TRUE, row.names = FALSE
-  )
-}
-"""
-
-"""
-## function calling ============================================================
-#
-xlsx::write.xlsx2(get_top_genes(df = TCGA_CNV, label = "AMP", 5),
-                  file = paste(file.path(output_directory, "Fig1"),
-                               "/TOP_AMP_genes.xlsx",
-                               sep = ""
-                  ),
-                  sheetName = "1", row.names = TRUE
-)
-
-xlsx::write.xlsx2(as.data.frame(TOP_AMP_PATH@result),
-                  file = paste(file.path(output_directory, "Fig1"),
-                               "/TOP_AMP_genes.xlsx",
-                               sep = ""
-                  ),
-                  sheetName = "2", append = TRUE, row.names = FALSE
-)
-
-#
-xlsx::write.xlsx2(get_top_genes(df = TCGA_CNV, label = c("DUP","AMP"), 30),
-                  file = paste(file.path(output_directory, "Fig1"),
-                               "/TOP_GAIN_genes.xlsx",
-                               sep = ""
-                  ),
-                  sheetName = "1", row.names = TRUE
-)
-
-xlsx::write.xlsx2(as.data.frame(TOP_GAIN_PATH@result),
-                  file = paste(file.path(output_directory, "Fig1"),
-                               "/TOP_GAIN_genes.xlsx",
-                               sep = ""
-                  ),
-                  sheetName = "2", append = TRUE, row.names = FALSE
-)
-
-#
-xlsx::write.xlsx2(get_top_genes(df = TCGA_CNV, label = "HOMDEL", 5),
-                  file = paste(file.path(output_directory, "Fig1"),
-                               "/TOP_HOMDEL_genes.xlsx",
-                               sep = ""
-                  ),
-                  sheetName = "1", row.names = TRUE
-)
-
-xlsx::write.xlsx2(as.data.frame(TOP_HOMDEL_PATH@result),
-                  file = paste(file.path(output_directory, "Fig1"),
-                               "/TOP_HOMDEL_genes.xlsx",
-                               sep = ""
-                  ),
-                  sheetName = "2", append = TRUE, row.names = FALSE
-)
-
-##
-coocurrance_analysis(df = TCGA_CNV,
-                     gene01 = "EIF4G1",
-                     gene02 = "EIF3E",
-                     cnv_1 = "AMP",
-                     cnv_2 = "AMP")  
-
-coocurrance_analysis(df = TCGA_CNV,
-                     gene01 = "EIF4G1",
-                     gene02 = "EIF3E",
-                     cnv_1 = "AMP",
-                     cnv_2 = "DUP")  
-
-coocurrance_analysis(df = TCGA_CNV,
-                     gene01 = "EIF4G1",
-                     gene02 = "EIF3H",
-                     cnv_1 = "AMP",
-                     cnv_2 = "AMP")  
-
-coocurrance_analysis(df = TCGA_CNV,
-                     gene01 = "EIF4G1",
-                     gene02 = "EIF3H",
-                     cnv_1 = "AMP",
-                     cnv_2 = "DUP")  
-"""
 
 
 def main(argv):
@@ -349,46 +226,43 @@ def main(argv):
   merged_phenotyped_data = TcgaCnvParser.merge_cnv_phenotypes(all_threshold_data)
   print(f'all threshold data, merged with phenotypes:\n{merged_phenotyped_data}')
 
-  tg1 = TcgaCnvParser.get_top_genes(df=all_threshold_data, labels=["AMP"], percent=5),
-  print(f'top genes 1:\n{tg1}')
+  # TOP_AMP_PATH, TOP_GAIN_PATH, TOP_HOMDEL_PATH are omitted for the time being,
+  # because pathway analysis is harder in Python than in R.
+  top_amp_genes = TcgaCnvParser.get_top_genes(df=all_threshold_data, labels=["AMP"], percent=5)
+  print(f'top amp genes:\n{top_amp_genes}')
 
-  tg2 = TcgaCnvParser.get_top_genes(df=all_threshold_data, labels=["DUP", "AMP"], percent=30)
-  print(f'top genes 2:\n{tg2}')
+  top_gain_genes = TcgaCnvParser.get_top_genes(df=all_threshold_data, labels=["DUP", "AMP"], percent=30)
+  print(f'top gain genes:\n{top_gain_genes}')
 
-  tg3 = TcgaCnvParser.get_top_genes(df=all_threshold_data, labels=["HOMDEL"], percent=5)
-  print(f'top genes 3:\n{tg3}')
+  top_homdel_genes = TcgaCnvParser.get_top_genes(df=all_threshold_data, labels=["HOMDEL"], percent=5)
+  print(f'top homdel genes:\n{top_homdel_genes}')
 
-  # buggy for now
-  """
+  top_genes_base_path = os.path.join(FLAGS.output_directory, "Fig1")
+  with pandas.ExcelWriter(path=os.path.join(top_genes_base_path, 'TOP_AMP_genes.xlsx')) as writer:
+    top_amp_genes.to_excel(writer, sheet_name='1')  # TODO(dlroxe): rownames=True
+
+  with pandas.ExcelWriter(path=os.path.join(top_genes_base_path, 'TOP_GAIN_genes.xlsx')) as writer:
+    top_gain_genes.to_excel(writer, sheet_name='1')  # TODO(dlroxe): rownames=True
+
+  with pandas.ExcelWriter(path=os.path.join(top_genes_base_path, 'TOP_HOMDEL_genes.xlsx')) as writer:
+    top_homdel_genes.to_excel(writer, sheet_name='1')  # TODO(dlroxe): rownames=True
+
+  print(f'"top genes" analyses are written to {top_genes_base_path}.')
+
+  # TODO(dlroxe): The following function calls all crash.  I'm can't quite discern the intent of the original R code.
   print('attempting coocurrance analysis 1')
-  TcgaCnvParser.coocurrance_analysis(df=all_threshold_data,
-                                     gene01="EIF4G1",
-                                     gene02="EIF3E",
-                                     cnv_1="AMP",
-                                     cnv_2="AMP")
+  TcgaCnvParser.coocurrance_analysis(df=all_threshold_data, gene01="EIF4G1", gene02="EIF3E", cnv_1="AMP", cnv_2="AMP")
 
   print('attempting coocurrance analysis 2')
-  TcgaCnvParser.coocurrance_analysis(df=all_threshold_data,
-                                     gene01="EIF4G1",
-                                     gene02="EIF3E",
-                                     cnv_1="AMP",
-                                     cnv_2="DUP")
+  TcgaCnvParser.coocurrance_analysis(df=all_threshold_data, gene01="EIF4G1", gene02="EIF3E", cnv_1="AMP", cnv_2="DUP")
 
   print('attempting coocurrance analysis 3')
-  TcgaCnvParser.coocurrance_analysis(df=all_threshold_data,
-                                     gene01="EIF4G1",
-                                     gene02="EIF3H",
-                                     cnv_1="AMP",
-                                     cnv_2="AMP")
+  TcgaCnvParser.coocurrance_analysis(df=all_threshold_data, gene01="EIF4G1", gene02="EIF3H", cnv_1="AMP", cnv_2="AMP")
 
   print('attempting coocurrance analysis 4')
-  TcgaCnvParser.coocurrance_analysis(df=all_threshold_data,
-                                     gene01="EIF4G1",
-                                     gene02="EIF3H",
-                                     cnv_1="AMP",
-                                     cnv_2="DUP")
-  """
+  TcgaCnvParser.coocurrance_analysis(df=all_threshold_data, gene01="EIF4G1", gene02="EIF3H", cnv_1="AMP", cnv_2="DUP")
   print('processing complete')
+
 
 if __name__ == "__main__":
   app.run(main)
