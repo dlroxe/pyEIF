@@ -121,7 +121,7 @@ class TcgaCnvParser:
     return values_data_frame.replace(cls.cnv_code_mappings)
 
   # TODO(dlroxe): Probably it's worth documenting the join() semantics more carefully, particularly regarding the
-  # indices, in merge_cnv_phenotypes().
+  #               indices, in merge_cnv_phenotypes().
   @classmethod
   def merge_cnv_phenotypes(cls, cnv_data: Optional[pandas.DataFrame] = None,
                            phenotype_data: Optional[pandas.DataFrame] = None) -> pandas.DataFrame:
@@ -146,6 +146,7 @@ class TcgaCnvParser:
 
 
     :param cnv_data: a dataframe obtained from get_tcga_cnv() or get_tcga_value()
+    :param phenotype_data: a dataframe based derived from data referenced by  FLAGS.cnv_data_phenotypes
     :return: a merged dataframe that combines CNV value/threshold data with CNV phenotype data.
     """
     cnv = TcgaCnvParser.get_tcga_cnv() if cnv_data is None else cnv_data
@@ -181,9 +182,6 @@ class TcgaCnvParser:
 
     def translate_gene_symbol_to_gene_id(gene_symbol: str) -> Optional[str]:
       """Returns the Entrez ID for 'gene_symbol', or None unaltered if lookup fails."""
-      # TODO(dlroxe): e.g. '7SK|ENSG00000232512.2' doesn't match any symbol in Hs.data.  For now, such rows
-      # are retained with their original names.  Should they be discarded?  Should Entrez identifiers be
-      # sought elsewhere?
       key = gene_symbol.split('|')[0]
       return hs_data_dict[key].gene_id if key in hs_data_dict else None
 
@@ -193,7 +191,7 @@ class TcgaCnvParser:
 
   # TODO(dlroxe): Fix up the function docstring below.
   @classmethod
-  def cooccurance_analysis(cls, df: pandas.DataFrame, gene01: str, gene02: str, cnv_1: str, cnv_2: str) -> None:
+  def cooccurance_analysis(cls, df: pandas.DataFrame, gene01: str, gene02: str, cnv_spec: List[str]) -> None:
     """
     For example, 'sheet 1' should have something like this:
 
@@ -204,21 +202,24 @@ class TcgaCnvParser:
     That is: 2220 samples are either AMP|DUP for G1, AND ALSO are either AMP|DUP for 3H.
     """
     df = df[[gene01, gene02]]
-    allowed = [cnv_1, cnv_2]
 
-    both_cnv_matches = len(df[df[gene01].isin(allowed) & df[gene02].isin(allowed)].index)
-    only_gene01_cnv_matches = len(df[df[gene01].isin(allowed) & ~df[gene02].isin(allowed)].index)
-    only_gene02_cnv_matches = len(df[df[gene02].isin(allowed) & ~df[gene01].isin(allowed)].index)
-    neither_cnv_matches = len(df[~df[gene01].isin(allowed) & ~df[gene02].isin(allowed)].index)
+    gene01y_gene02y = len(df[df[gene01].isin(cnv_spec) & df[gene02].isin(cnv_spec)])
+    gene01y_gene02n = len(df[df[gene01].isin(cnv_spec) & ~df[gene02].isin(cnv_spec)])
+    gene01n_gene02y = len(df[~df[gene01].isin(cnv_spec) & df[gene02].isin(cnv_spec)])
+    gene01n_gene02n = len(df[~df[gene01].isin(cnv_spec) & ~df[gene02].isin(cnv_spec)])
+
+    def row_or_col_name(gene: str, matches_cnv_spec: bool) -> str:
+      components = [x for x in ([gene, None if matches_cnv_spec else 'NO'] + cnv_spec) if x]
+      return '_'.join(components)
 
     eif = pandas.DataFrame(
       data={
-        '_'.join((gene02, cnv_1, cnv_2)): [both_cnv_matches, only_gene02_cnv_matches],
-        '_'.join((gene02, 'NO', cnv_1, cnv_2)): [only_gene01_cnv_matches, neither_cnv_matches],
+        row_or_col_name(gene=gene02, matches_cnv_spec=True): [gene01y_gene02y, gene01n_gene02y],
+        row_or_col_name(gene=gene02, matches_cnv_spec=False): [gene01y_gene02n, gene01n_gene02n],
       },
       index=[
-        '_'.join((gene01, cnv_1, cnv_2)),
-        '_'.join((gene01, 'NO', cnv_1, cnv_2)),
+        row_or_col_name(gene=gene01, matches_cnv_spec=True),
+        row_or_col_name(gene=gene01, matches_cnv_spec=False),
       ])
 
     print(f'got adjusted counts:\n{eif}\n')
@@ -231,8 +232,9 @@ class TcgaCnvParser:
     chi_test = pandas.DataFrame(data={'Chi-Squared': [chi_sq], 'P Value': [p_value]})
     print(f'got chi-sq test:\n{chi_test}\n')
 
-    with pandas.ExcelWriter(
-        path=os.path.join(FLAGS.output_directory, "Fig1", '_'.join((gene01, gene02, cnv_1, cnv_2)), '.xlsx')) as writer:
+    excel_output_file = os.path.join(
+      FLAGS.output_directory, "Fig1", '_'.join([gene01, gene02] + cnv_spec) + '.xlsx')
+    with pandas.ExcelWriter(path=excel_output_file) as writer:
       eif.to_excel(writer, sheet_name='1')  # TODO(dlroxe): rownames=True
       fisher.to_excel(writer, sheet_name='Fisheroneside')  # TODO(dlroxe): rownames=False
       chi_test.to_excel(writer, sheet_name='chi_test')  # TODO(dlroxe): rownames=False
@@ -247,14 +249,14 @@ class TcgaCnvParser:
 # TODO(dlroxe): Move this into the initializer for the class above, and instantiate the class.
 def _init_hs_data() -> Dict[str, UniGene.Record]:
   # Note, in the version available on Jan 1 2023, the Hs.data file included a typo that made it unparseable.
-  # In particular, "ID Hs.716839" included the line "ACC == D22S272".  There should be only one "=".  Furthermore,
-  # there seems to be a parse error with the last record "no matter what".
+  # In particular, "ID Hs.716839" included a line containing "ACC == D22S272", which should have only one "=".
+  # Furthermore, there seems to be a parse error with the last record "no matter what".
   #
   # Of course, it should be assumed that such a large set of data will have at least one small error *somewhere*.
   #
   # This function includes error-handling logic to make it easy to detect such problems, because the built-in
   # next() functionality for the generator returned by UniGene.parse() is not sufficiently robust.  How nice it would
-  # be, to just write "for record in UniGene.parse()", but alas it's just too brittle and we can't count on it.  Oh,
+  # be, simply to write "for record in UniGene.parse()", but alas it's just too brittle and we can't count on it.  Oh,
   # well.
   print('initializing HS data')
   hs_data_dict = {}
@@ -325,20 +327,19 @@ def main(argv):
     top_homdel_genes.to_excel(writer, sheet_name='1')  # TODO(dlroxe): rownames=True
     # TODO(dlroxe): add TOP_HOMDEL_PATH to sheet 2
 
-  print(f'"top genes" analyses are written to {top_genes_base_path}.')
+  print(f'"top genes" analyses have been written under {top_genes_base_path}.')
 
-  # TODO(dlroxe): The following function calls all crash.  I can't quite discern the intent of the original R code.
   print('attempting cooccurance analysis 1')
-  TcgaCnvParser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1", gene02="EIF3E", cnv_1="AMP", cnv_2="AMP")
+  TcgaCnvParser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1", gene02="EIF3E", cnv_spec=["AMP", ])
 
   print('attempting coocurrance analysis 2')
-  TcgaCnvParser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1", gene02="EIF3E", cnv_1="AMP", cnv_2="DUP")
+  TcgaCnvParser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1", gene02="EIF3E", cnv_spec=["AMP", "DUP"])
 
   print('attempting coocurrance analysis 3')
-  TcgaCnvParser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1", gene02="EIF3H", cnv_1="AMP", cnv_2="AMP")
+  TcgaCnvParser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1", gene02="EIF3H", cnv_spec=["AMP", ])
 
   print('attempting coocurrance analysis 4')
-  TcgaCnvParser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1", gene02="EIF3H", cnv_1="AMP", cnv_2="DUP")
+  TcgaCnvParser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1", gene02="EIF3H", cnv_spec=["AMP", "DUP"])
   print('processing complete')
 
 
