@@ -1,13 +1,14 @@
 """Tests for init_data.py."""
 
-import pandas
 from absl.testing import absltest
 
+import entrez_lookup
 import init_data
+import pandas
 
 
 class UnitTests(absltest.TestCase):
-  def test_treshold_label_substitution(self):
+  def test_threshold_label_substitution(self):
     raw_threshold_data = pandas.DataFrame({
       'Sample': ['gene1', 'gene2', 'gene3', 'gene4', 'gene5'],
       'TCGA-A5-A0GI-01': [2.0, 0.0, 0.0, 0.0, 1.0],
@@ -60,15 +61,17 @@ class UnitTests(absltest.TestCase):
       'TCGA-S9-A7J2-01': ['HOMDEL', 'DEL', 'DEL', 'DEL', 'DEL'],
       'TCGA-06-0150-01': ['DIPLOID', 'DIPLOID', 'DIPLOID', 'DIPLOID', 'DIPLOID'],
     }).set_index('Sample').transpose()
-    top_genes01 = init_data.get_top_genes(threshold_data, labels=['AMP'], percent=30)
-    top_genes02 = init_data.get_top_genes(threshold_data, labels=['AMP'], percent=40)
-    top_genes03 = init_data.get_top_genes(threshold_data, labels=['AMP', 'DUP'], percent=30)
-    top_genes04 = init_data.get_top_genes(threshold_data, labels=['AMP', 'DUP'], percent=40)
-    top_genes05 = init_data.get_top_genes(threshold_data, labels=['AMP', 'DIPLOID', 'DUP'], percent=30)
-    top_genes06 = init_data.get_top_genes(threshold_data, labels=['AMP', 'DIPLOID', 'DUP'], percent=60)
-    top_genes07 = init_data.get_top_genes(threshold_data, labels=['AMP', 'DIPLOID', 'DUP'], percent=70)
-    top_genes08 = init_data.get_top_genes(threshold_data, labels=['DIPLOID'], percent=30)
-    top_genes09 = init_data.get_top_genes(threshold_data, labels=['DIPLOID'], percent=60)
+    entrez_handle = entrez_lookup.EntrezLookup(hs_file=None)
+    top_genes = init_data.TcgaCnvParser.get_top_genes  # for convenience
+    top_genes01 = top_genes(threshold_data, labels=['AMP'], percent=30, entrez_handle=entrez_handle)
+    top_genes02 = top_genes(threshold_data, labels=['AMP'], percent=40, entrez_handle=entrez_handle)
+    top_genes03 = top_genes(threshold_data, labels=['AMP', 'DUP'], percent=30, entrez_handle=entrez_handle)
+    top_genes04 = top_genes(threshold_data, labels=['AMP', 'DUP'], percent=40, entrez_handle=entrez_handle)
+    top_genes05 = top_genes(threshold_data, labels=['AMP', 'DIPLOID', 'DUP'], percent=30, entrez_handle=entrez_handle)
+    top_genes06 = top_genes(threshold_data, labels=['AMP', 'DIPLOID', 'DUP'], percent=60, entrez_handle=entrez_handle)
+    top_genes07 = top_genes(threshold_data, labels=['AMP', 'DIPLOID', 'DUP'], percent=70, entrez_handle=entrez_handle)
+    top_genes08 = top_genes(threshold_data, labels=['DIPLOID'], percent=30, entrez_handle=entrez_handle)
+    top_genes09 = top_genes(threshold_data, labels=['DIPLOID'], percent=60, entrez_handle=entrez_handle)
 
     # TODO(dlroxe): These are simple assertions about counts.  Add specific tests of gene names and percentages.
     self.assertEqual(len(top_genes01), 1, msg=str(top_genes01))
@@ -80,3 +83,7 @@ class UnitTests(absltest.TestCase):
     self.assertEqual(len(top_genes07), 0, msg=str(top_genes07))
     self.assertEqual(len(top_genes08), 5, msg=str(top_genes08))
     self.assertEqual(len(top_genes09), 3, msg=str(top_genes06))
+
+
+if __name__ == '__main__':
+  absltest.main()

@@ -25,6 +25,7 @@ from absl import app
 from absl import flags
 from typing import Dict, List, Optional
 import datatable
+import entrez_lookup
 import os
 import pandas
 from scipy import stats
@@ -164,7 +165,7 @@ class TcgaCnvParser:
 
   @classmethod
   def get_top_genes(cls, df: pandas.DataFrame, labels: List[str], percent: int,
-                    hs_data_dict: Dict[str, UniGene.Record]) -> pandas.DataFrame:
+                    entrez_handle: entrez_lookup.EntrezLookup) -> pandas.DataFrame:
     sample_number = len(df.index)
     df.index.name = 'rowname'
     df = (  # Extra outer parens here permit easy formatting that starts each chained function call on its own line.
@@ -180,12 +181,7 @@ class TcgaCnvParser:
     )
     print(f'top genes:\n{df}')
 
-    def translate_gene_symbol_to_gene_id(gene_symbol: str) -> Optional[str]:
-      """Returns the Entrez ID for 'gene_symbol', or None unaltered if lookup fails."""
-      key = gene_symbol.split('|')[0]
-      return hs_data_dict[key].gene_id if key in hs_data_dict else None
-
-    df['entrez'] = df['Gene'].apply(translate_gene_symbol_to_gene_id)
+    df['entrez'] = df['Gene'].apply(entrez_handle.translate_gene_symbol_to_entrez_id)
     print(f'top genes (adjusted):\n{df}')
     return df
 
@@ -240,51 +236,6 @@ class TcgaCnvParser:
       chi_test.to_excel(writer, sheet_name='chi_test')  # TODO(dlroxe): rownames=False
 
 
-# TODO(dlroxe): Hmm, looks like this data started going stale around 2013.  Is there another source (that doesn't
-#               require an active network connection, preferably, so that data can be versioned and archived)?
-#               Hmm, perhaps 'AnnoKey' or something like it could make a cache?
-#               http://bjpop.github.io/annokey/
-#               In particular, perhaps this could be helpful:
-#               get_ncbi_gene_snapshot_xml.py
-# TODO(dlroxe): Move this into the initializer for the class above, and instantiate the class.
-def _init_hs_data() -> Dict[str, UniGene.Record]:
-  # Note, in the version available on Jan 1 2023, the Hs.data file included a typo that made it unparseable.
-  # In particular, "ID Hs.716839" included a line containing "ACC == D22S272", which should have only one "=".
-  # Furthermore, there seems to be a parse error with the last record "no matter what".
-  #
-  # Of course, it should be assumed that such a large set of data will have at least one small error *somewhere*.
-  #
-  # This function includes error-handling logic to make it easy to detect such problems, because the built-in
-  # next() functionality for the generator returned by UniGene.parse() is not sufficiently robust.  How nice it would
-  # be, simply to write "for record in UniGene.parse()", but alas it's just too brittle and we can't count on it.  Oh,
-  # well.
-  print('initializing HS data')
-  hs_data_dict = {}
-  # What an absurd incantation to resolve "~" on Windows (which open() can't handle); but OK. Thanks, StackOverflow.
-  hs_file = os.path.abspath(os.path.expanduser(os.path.expandvars(os.path.join(FLAGS.data_directory, FLAGS.hs_data))))
-  hs_records = None
-  with open(hs_file) as raw_hs_data:
-    hs_records = UniGene.parse(raw_hs_data)
-    # Available attributes in each record are documented here:
-    # https://biopython.org/docs/1.76/api/Bio.UniGene.html#Bio.UniGene.Record
-    try:
-      count = 0
-      last_id = ''
-      while True:
-        try:
-          hs_record = next(hs_records)
-          hs_data_dict[hs_record.symbol] = hs_record
-          last_id = hs_record.ID
-          count = count + 1
-        except Exception as ex:
-          print(f'error parsing record {count} (last ID: {last_id}: {ex}')
-          break
-    except StopIteration:
-      print('all HS records consumed')
-  print('HS data initialized')
-  return hs_data_dict
-
-
 def main(argv):
   eif_genes = ["EIF4G1", "EIF3E", "EIF3H", ]
 
@@ -301,17 +252,20 @@ def main(argv):
 
   # TOP_AMP_PATH, TOP_GAIN_PATH, TOP_HOMDEL_PATH are omitted for the time being,
   # because pathway analysis is harder in Python than in R.
-  hs_data_dict = _init_hs_data()
+  # What an absurd incantation to resolve "~" on Windows (which open() can't handle); but OK. Thanks, StackOverflow.
+  hs_file = os.path.abspath(os.path.expanduser(os.path.expandvars(os.path.join(FLAGS.data_directory, FLAGS.hs_data))))
+  entrez_handle = entrez_lookup.EntrezLookup(hs_file)
+
   top_amp_genes = TcgaCnvParser.get_top_genes(df=all_threshold_data, labels=["AMP"], percent=5,
-                                              hs_data_dict=hs_data_dict)
+                                              entrez_handle=entrez_handle)
   print(f'top amp genes:\n{top_amp_genes}')
 
   top_gain_genes = TcgaCnvParser.get_top_genes(df=all_threshold_data, labels=["DUP", "AMP"], percent=30,
-                                               hs_data_dict=hs_data_dict)
+                                               entrez_handle=entrez_handle)
   print(f'top gain genes:\n{top_gain_genes}')
 
   top_homdel_genes = TcgaCnvParser.get_top_genes(df=all_threshold_data, labels=["HOMDEL"], percent=5,
-                                                 hs_data_dict=hs_data_dict)
+                                                 entrez_handle=entrez_handle)
   print(f'top homdel genes:\n{top_homdel_genes}')
 
   top_genes_base_path = os.path.join(FLAGS.output_directory, "Fig1")
