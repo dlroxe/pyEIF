@@ -12,8 +12,7 @@ from typing import Dict, Optional
 from absl import logging
 
 
-
-class EntrezLookup():
+class EntrezLookup:
   """
   This is a stateful container that implements all methods necessary for "Entrez" interactions.  For example,
   when instantiated, it reads a local 'Hs.data' file and retains in memory a lookup dictionary for the data therein.

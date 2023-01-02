@@ -23,12 +23,14 @@ maintained.
 from Bio import UniGene
 from absl import app
 from absl import flags
+rom absl import logging
 from typing import Dict, List, Optional
 import datatable
 import entrez_lookup
 import os
 import pandas
 from scipy import stats
+import sys
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string('data_directory', os.path.join('~', 'Desktop', 'pyeif_data'), 'parent dir for data files')
@@ -94,9 +96,9 @@ class TcgaCnvParser:
     :param raw_data_file: the name of a file (relative to the configured data directory) containing raw data
     :return: a data frame with samples as rows.
     """
-    print(f'reading from {os.path.join(FLAGS.data_directory, raw_data_file)}')
-    return datatable.fread(file=os.path.join(FLAGS.data_directory, raw_data_file)
-                           ).to_pandas().sort_values(by=['Sample']).set_index('Sample').transpose()
+    input_file=os.path.join(FLAGS.data_directory, raw_data_file)
+    logging.info('reading from %s', input_file)
+    return datatable.fread(file=input_file).to_pandas().sort_values(by=['Sample']).set_index('Sample').transpose()
 
   @classmethod
   def get_tcga_cnv(cls, values_data_frame: Optional[pandas.DataFrame] = None) -> pandas.DataFrame:
@@ -179,10 +181,8 @@ class TcgaCnvParser:
       .loc[lambda x: x['Value'] > percent]
       .reset_index()
     )
-    print(f'top genes:\n{df}')
 
     df['entrez'] = df['Gene'].apply(entrez_handle.translate_gene_symbol_to_entrez_id)
-    print(f'top genes (adjusted):\n{df}')
     return df
 
   # TODO(dlroxe): Fix up the function docstring below.
@@ -218,15 +218,15 @@ class TcgaCnvParser:
         row_or_col_name(gene=gene01, matches_cnv_spec=False),
       ])
 
-    print(f'got adjusted counts:\n{eif}\n')
+    logging.info('got adjusted counts:\n%s', eif)
 
     odds_ratio, p_value = stats.fisher_exact(eif, alternative='greater')  # R version does the counting first
     fisher = pandas.DataFrame(data={'Odds Ratio': [odds_ratio], 'P Value': [p_value]})
-    print(f'got fisher test:\n{fisher}\n')
+    logging.info('got fisher test:\n%s', fisher)
 
     chi_sq, p_value = stats.chisquare(eif)
     chi_test = pandas.DataFrame(data={'Chi-Squared': [chi_sq], 'P Value': [p_value]})
-    print(f'got chi-sq test:\n{chi_test}\n')
+    logging.info('got chi-sq test:\n%s', chi_test)
 
     excel_output_file = os.path.join(
       FLAGS.output_directory, "Fig1", '_'.join([gene01, gene02] + cnv_spec) + '.xlsx')
@@ -237,18 +237,20 @@ class TcgaCnvParser:
 
 
 def main(argv):
+  # TODO(dlroxe): Decide whether logging to stdout is desired in the long term.
+  logging.get_absl_handler().python_handler.stream = sys.stdout
   eif_genes = ["EIF4G1", "EIF3E", "EIF3H", ]
 
   all_data = TcgaCnvParser.get_tcga_cnv_value(raw_data_file=FLAGS.cnv_data_by_gene_values)
-  print(f'all data\n{all_data}')
+  logging.info('all data\n%s', all_data)
 
   raw_threshold_data = TcgaCnvParser.get_tcga_cnv_value(raw_data_file=FLAGS.cnv_data_by_gene_thresholds)
   all_threshold_data = TcgaCnvParser.get_tcga_cnv(values_data_frame=raw_threshold_data)
   eif_threshold_data = all_threshold_data[eif_genes]
-  print(f'eif threshold data\n{eif_threshold_data}')
+  logging.info('eif threshold data\n%s', eif_threshold_data)
 
   merged_phenotyped_data = TcgaCnvParser.merge_cnv_phenotypes(all_threshold_data)
-  print(f'all threshold data, merged with phenotypes:\n{merged_phenotyped_data}')
+  logging.info('all threshold data, merged with phenotypes:\n%s', merged_phenotyped_data)
 
   # TOP_AMP_PATH, TOP_GAIN_PATH, TOP_HOMDEL_PATH are omitted for the time being,
   # because pathway analysis is harder in Python than in R.
@@ -258,15 +260,15 @@ def main(argv):
 
   top_amp_genes = TcgaCnvParser.get_top_genes(df=all_threshold_data, labels=["AMP"], percent=5,
                                               entrez_handle=entrez_handle)
-  print(f'top amp genes:\n{top_amp_genes}')
+  logging.info('top amp genes:\n%s', top_amp_genes)
 
   top_gain_genes = TcgaCnvParser.get_top_genes(df=all_threshold_data, labels=["DUP", "AMP"], percent=30,
                                                entrez_handle=entrez_handle)
-  print(f'top gain genes:\n{top_gain_genes}')
+  logging.info('top gain genes:\n%s', top_gain_genes)
 
   top_homdel_genes = TcgaCnvParser.get_top_genes(df=all_threshold_data, labels=["HOMDEL"], percent=5,
                                                  entrez_handle=entrez_handle)
-  print(f'top homdel genes:\n{top_homdel_genes}')
+  logging.info('top homdel genes:\n%s', top_homdel_genes)
 
   top_genes_base_path = os.path.join(FLAGS.output_directory, "Fig1")
   with pandas.ExcelWriter(path=os.path.join(top_genes_base_path, 'TOP_AMP_genes.xlsx')) as writer:
@@ -281,20 +283,21 @@ def main(argv):
     top_homdel_genes.to_excel(writer, sheet_name='1')  # TODO(dlroxe): rownames=True
     # TODO(dlroxe): add TOP_HOMDEL_PATH to sheet 2
 
-  print(f'"top genes" analyses have been written under {top_genes_base_path}.')
+  logging.info('"top genes" analyses have been written under %s.', top_genes_base_path)
 
-  print('attempting cooccurance analysis 1')
+  logging.info('attempting cooccurance analysis 1')
   TcgaCnvParser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1", gene02="EIF3E", cnv_spec=["AMP", ])
 
-  print('attempting coocurrance analysis 2')
+  logging.info('attempting coocurrance analysis 2')
   TcgaCnvParser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1", gene02="EIF3E", cnv_spec=["AMP", "DUP"])
 
-  print('attempting coocurrance analysis 3')
+  logging.info('attempting coocurrance analysis 3')
   TcgaCnvParser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1", gene02="EIF3H", cnv_spec=["AMP", ])
 
-  print('attempting coocurrance analysis 4')
+  logging.info('attempting coocurrance analysis 4')
   TcgaCnvParser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1", gene02="EIF3H", cnv_spec=["AMP", "DUP"])
-  print('processing complete')
+
+  logging.info('processing complete')
 
 
 if __name__ == "__main__":
