@@ -80,8 +80,8 @@ class TcgaCnvParser:
     pass
 
   @classmethod
-  def get_tcga_cnv_value(cls, raw_data_file: Optional[
-    str] = None) -> pandas.DataFrame:
+  def get_tcga_cnv_value(
+      cls, raw_data_file: Optional[str] = None) -> pandas.DataFrame:
     """
     Reads raw_data_file and returns a related dataframe.
 
@@ -112,12 +112,18 @@ class TcgaCnvParser:
     """
     input_file = os.path.join(FLAGS.data_directory, raw_data_file)
     logging.info('reading from %s', input_file)
-    return datatable.fread(file=input_file).to_pandas().sort_values(
-      by=['Sample']).set_index('Sample').transpose()
+
+    return (
+      datatable.fread(file=input_file).to_pandas()
+      .sort_values(by=['Sample'])
+      .set_index('Sample')
+      .transpose()
+    )
 
   @classmethod
-  def get_tcga_cnv(cls, values_data_frame: Optional[
-    pandas.DataFrame] = None) -> pandas.DataFrame:
+  def get_tcga_cnv(
+      cls,
+      values_data_frame: Optional[pandas.DataFrame] = None) -> pandas.DataFrame:
     """
     Returns get_tcga_cnv_value(), with numeric cell values replaced by labels.
 
@@ -147,9 +153,10 @@ class TcgaCnvParser:
   #               carefully, particularly regarding the indices, in
   #               merge_cnv_phenotypes().
   @classmethod
-  def merge_cnv_phenotypes(cls, cnv_data: Optional[pandas.DataFrame] = None,
-                           phenotype_data: Optional[
-                             pandas.DataFrame] = None) -> pandas.DataFrame:
+  def merge_cnv_phenotypes(
+      cls,
+      cnv_data: Optional[pandas.DataFrame] = None,
+      phenotype_data: Optional[pandas.DataFrame] = None) -> pandas.DataFrame:
     """
     Merges TCGA 'sample type' and 'primary disease' phenotypes with CNV data.
 
@@ -193,14 +200,19 @@ class TcgaCnvParser:
 
   @classmethod
   def get_top_genes(
-      cls, df: pandas.DataFrame, labels: List[str], percent: int,
-      entrez_handle: entrez_lookup.EntrezLookup) -> pandas.DataFrame:
+      cls,
+      df: pandas.DataFrame,
+      labels: List[str],
+      percent: int,
+      entrez_handle: entrez_lookup.EntrezLookup,
+  ) -> pandas.DataFrame:
     sample_number = len(df.index)
     df.index.name = 'rowname'
     # Extra outer parens here permit easy formatting that starts each chained
     # function call on its own line.
-    df = (
-      df.reset_index()
+    return (
+      df
+      .reset_index()
       .melt(id_vars=['rowname'], var_name='Gene', value_name='Value',
             ignore_index=True)
       .set_index('rowname')
@@ -210,11 +222,10 @@ class TcgaCnvParser:
       .apply(lambda x: 100 * x / sample_number)
       .loc[lambda x: x['Value'] > percent]
       .reset_index()
+      .assign(
+        entrez=lambda x: x['Gene'].apply(
+          entrez_handle.translate_gene_symbol_to_entrez_id))
     )
-
-    df['entrez'] = df['Gene'].apply(
-      entrez_handle.translate_gene_symbol_to_entrez_id)
-    return df
 
   # TODO(dlroxe): Fix up the function docstring below.
   @classmethod
@@ -232,6 +243,7 @@ class TcgaCnvParser:
     """
     df = df[[gene01, gene02]]
 
+    # TODO(dlroxe): Consider using 'crosstab' for this.
     gene01y_gene02y = len(
       df[df[gene01].isin(cnv_spec) & df[gene02].isin(cnv_spec)])
     gene01y_gene02n = len(
@@ -242,17 +254,18 @@ class TcgaCnvParser:
       df[~df[gene01].isin(cnv_spec) & ~df[gene02].isin(cnv_spec)])
 
     def row_or_col_name(gene: str, matches_cnv_spec: bool) -> str:
-      components = [x for x in
-                    ([gene, None if matches_cnv_spec else 'NO'] + cnv_spec) if
-                    x]
-      return '_'.join(components)
+      """Returns e.g. EIF4G1_AMP_DUP, EIF4G1_NO_AMP_DUP, EIF4G1_AMP, etc."""
+      components = [
+        x for x in
+        ([gene, None if matches_cnv_spec else 'NO'] + cnv_spec) if x]
+      return ' '.join(components)
 
     eif = pandas.DataFrame(
       data={
-        row_or_col_name(gene=gene02, matches_cnv_spec=True): [gene01y_gene02y,
-                                                              gene01n_gene02y],
-        row_or_col_name(gene=gene02, matches_cnv_spec=False): [gene01y_gene02n,
-                                                               gene01n_gene02n],
+        row_or_col_name(gene=gene02, matches_cnv_spec=True):
+          [gene01y_gene02y, gene01n_gene02y],
+        row_or_col_name(gene=gene02, matches_cnv_spec=False):
+          [gene01y_gene02n, gene01n_gene02n],
       },
       index=[
         row_or_col_name(gene=gene01, matches_cnv_spec=True),
