@@ -4,8 +4,8 @@ Read and parse raw data related to the pyEIF project.
 
 This file may be imported as a module or run as a stand-alone executable.
 
-This code relies upon Googles 'ABSL' ('Abseil') libraries.  Among other things, these provide a mechanism to define
-command-line flags.  So, for example, this file may be executed in the following manner:
+The program requires data, which should be separately downloaded into a
+data directory.  The data location may be specified by a command-line flag.
 
 ./init_data.py --data_directory=~/Desktop/pyeif_data
 
@@ -13,16 +13,52 @@ For a description of available flags, execute with the --help option:
 
 ./init_data.py --help
 
+This will show additional options, such as a way to specify names of
+individual data files.  Typically, it should not be necessary to specify
+them, because by default the program references files using the same
+names they are given in the repositories where they are officially
+maintained.
 """
+
 from absl import app
 from absl import flags
+from absl import logging
+from scipy import stats
 from typing import List, Optional
+
 import datatable
+import entrez_lookup
 import os
 import pandas
+import sys
 
 FLAGS = flags.FLAGS
-flags.DEFINE_string('data_directory', '~/Desktop/pyeif_data', 'parent dir for data files')
+flags.DEFINE_string('data_directory',
+                    os.path.join('~', 'Desktop', 'pyeif_data'),
+                    'parent dir for data files')
+flags.DEFINE_string('output_directory',
+                    os.path.join('~', 'Desktop', 'pyeif_output'),
+                    'parent dir for output')
+flags.DEFINE_string('cnv_data_by_gene_values',
+                    'Gistic2_CopyNumber_Gistic2_all_data_by_genes',
+                    'the path, relative to data_directory, where raw data '
+                    'values can be found for tissue samples with gene copy '
+                    'numbers.')
+flags.DEFINE_string('cnv_data_by_gene_thresholds',
+                    'Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes',
+                    'the path, relative to data_directory, where threshold '
+                    'data values can be found for tissue samples with gene '
+                    'copy numbers.  These values are constrained to be '
+                    'integers in the range [-2, 2].')
+flags.DEFINE_string('cnv_data_phenotypes',
+                    'TCGA_phenotype_denseDataOnlyDownload.tsv',
+                    'the path, relative to data_directory, where phenotype '
+                    'data can be found for tissue samples named in '
+                    'cnv_data_by_gene_values and cnv_data_by_gene_thresholds.')
+flags.DEFINE_string('hs_data', 'Hs.data',
+                    'unzipped contents of '
+                    'ftp.ncbi.nih.gov/'
+                    'repository/UniGene/Homo_sapiens/Hs.data.gz')
 
 
 class TcgaCnvParser:
@@ -30,8 +66,8 @@ class TcgaCnvParser:
   Methods and configuration settings for parsing TCGA CNV data.
   """
 
-  # This variable is left public because it encodes the implicit meaning for the values
-  # in Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes.
+  # This variable is left public because it encodes the implicit meaning for the
+  # values in Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes.
   cnv_code_mappings = {
     2.0: 'AMP',
     1.0: 'DUP',
@@ -43,15 +79,9 @@ class TcgaCnvParser:
   def __init__(self):
     pass
 
-  # TODO(dlroxe): Probably eliminate 'genes_of_interest' as a parameter from the next two functions.
-  # It's very easy for the caller to simply apply the [] operator to achieve the desired result, without
-  # impacting the signatures and documentation of these functions.  Furthermore, these functions are now
-  # quick enough for the full dataset that the ability to specify a subset when the function is called
-  # doesn't provide a compelling performance benefit, either.
-
   @classmethod
-  def get_tcga_cnv_value(cls, raw_data_file: Optional[str] = None,
-                         genes_of_interest: Optional[List[str]] = None) -> pandas.DataFrame:
+  def get_tcga_cnv_value(
+      cls, raw_data_file: Optional[str] = None) -> pandas.DataFrame:
     """
     Reads raw_data_file and returns a related dataframe.
 
@@ -65,8 +95,9 @@ class TcgaCnvParser:
     ANKRD65                                0.0             -1.0              0.0    ...             0.0
     ATAD3A                                 0.0             -1.0              0.0    ...             0.0
 
-    The rows are genes, and the columns are samples.  This function transposes the data and selects certain genes.
-    For example, for certain EIF genes, it returns a dataframe of this form:
+    The rows are genes, and the columns are samples.  This function transposes
+    the data and selects certain genes.  For example, for certain EIF genes, it
+    returns a dataframe of this form:
 
     Sample          EIF4G1 EIF3E EIF3H
     TCGA-A5-A0GI-01    0.0   0.0   0.0
@@ -75,22 +106,26 @@ class TcgaCnvParser:
     ...                ...   ...   ...
     TCGA-DD-A115-01    0.0  -1.0  -1.0
 
-    If genes_of_interest is None, then no filtering of the columns is performed (i.e. all genes will be selected).
-
-    :param raw_data_file: the name of a file (relative to the configured data directory) containing raw data
-    :param genes_of_interest: a list of genes; in this example ['EIF4G1', 'EIF3E', 'EIF3H'], or None
-    :return: a data frame with samples as rows and selected genes as columns
-     (or all genes, if genes_of_interest is None).
+    :param raw_data_file: the name of a file (relative to the configured data
+      directory) containing raw data
+    :return: a data frame with samples as rows.
     """
-    df = datatable.fread(file=os.path.join(FLAGS.data_directory, raw_data_file)
-                         ).to_pandas().sort_values(by=['Sample']).set_index('Sample').transpose()
-    return df[genes_of_interest] if genes_of_interest else df
+    input_file = os.path.join(FLAGS.data_directory, raw_data_file)
+    logging.info('reading from %s', input_file)
+
+    return (
+      datatable.fread(file=input_file).to_pandas()
+      .sort_values(by=['Sample'])
+      .set_index('Sample')
+      .transpose()
+    )
 
   @classmethod
-  def get_tcga_cnv(cls, genes_of_interest: Optional[str] = None,
-                   values_data_frame: Optional[datatable.Frame] = None) -> pandas.DataFrame:
+  def get_tcga_cnv(
+      cls,
+      values_data_frame: Optional[pandas.DataFrame] = None) -> pandas.DataFrame:
     """
-    Returns the output of get_tcga_cnv_value(), but with numeric cell values replaced by labels.
+    Returns get_tcga_cnv_value(), with numeric cell values replaced by labels.
 
     Sample output for a selection of EIF genes:
 
@@ -101,27 +136,34 @@ class TcgaCnvParser:
     ...                  ...      ...      ...
     TCGA-DD-A115-01  DIPLOID      DEL      DEL
 
-    :param genes_of_interest: a list of genes (in this example ['EIF4G1', 'EIF3E', 'EIF3H']), or 'None' for all genes
     :param values_data_frame: if None, then the function uses the value
-           returned by get_tcga_cnv_value('Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes', genes_of_interest)
-    :return: a data frame with samples as rows, selected genes as columns, and string labels as cell values.
+           returned by
+           get_tcga_cnv_value(
+           'Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes')
+    :return: a data frame with samples as rows, selected genes as columns, and
+     string labels as cell values.
     """
-    # Note the .replace() call.  It just applies the dictionary, and is very quick.
-    return values_data_frame or cls.get_tcga_cnv_value(
-      raw_data_file='Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes',
-      genes_of_interest=genes_of_interest).replace(cls.cnv_code_mappings)
+    # Note the .replace() call, which just applies the dict, and is very quick.
+    if values_data_frame is None:
+      values_data_frame = cls.get_tcga_cnv_value(
+        raw_data_file=FLAGS.cnv_data_by_gene_thresholds)
+    return values_data_frame.replace(cls.cnv_code_mappings)
 
-  # TODO(dlroxe): Probably it's worth documenting the join() semantics more carefully, particularly regarding the
-  # indices, in merge_cnv_phenotypes().
+  # TODO(dlroxe): Probably it's worth documenting the join() semantics more
+  #               carefully, particularly regarding the indices, in
+  #               merge_cnv_phenotypes().
   @classmethod
-  def merge_cnv_phenotypes(cls, cnv_data: Optional[pandas.DataFrame] = None) -> pandas.DataFrame:
+  def merge_cnv_phenotypes(
+      cls,
+      cnv_data: Optional[pandas.DataFrame] = None,
+      phenotype_data: Optional[pandas.DataFrame] = None) -> pandas.DataFrame:
     """
-    Merges TCGA phenotype data, specifically 'sample type' and 'primary disease', with CNV data.
+    Merges TCGA 'sample type' and 'primary disease' phenotypes with CNV data.
 
     For example, CNV data might include this row:
 
-    Sample          7SK|ENSG00000232512.2 7SK|ENSG00000249352.3 7SK|ENSG00000254144.2  ... snoZ6|ENSG00000264452.1 snoZ6|ENSG00000266692.1 snosnR66
-    TCGA-A5-A0GI-01               DIPLOID               DIPLOID               DIPLOID  ...                 DIPLOID                 DIPLOID  DIPLOID
+    Sample             gene1    gene2    gene3  ...   gene4    gene5    gene6
+    TCGA-A5-A0GI-01  DIPLOID  DIPLOID  DIPLOID  ... DIPLOID  DIPLOID  DIPLOID
 
     Phenotype data might include this row:
 
@@ -131,189 +173,211 @@ class TcgaCnvParser:
 
     The merged data would look like this:
 
-                    7SK|ENSG00000232512.2 7SK|ENSG00000249352.3 7SK|ENSG00000254144.2  ... snosnR66    sample.type                        primary_disease
-    TCGA-A5-A0GI-01               DIPLOID               DIPLOID               DIPLOID  ...  DIPLOID  Primary Tumor  uterine corpus endometrioid carcinoma
+    Sample             gene1    gene2    gene3  ...   gene6    sample.type                        primary_disease
+    TCGA-A5-A0GI-01  DIPLOID  DIPLOID  DIPLOID  ... DIPLOID  Primary Tumor  uterine corpus endometrioid carcinoma
 
 
-    :param cnv_data: a dataframe obtained from get_tcga_cnv() or get_tcga_value()
-    :return: a merged dataframe that combines CNV value/threshold data with CNV phenotype data.
+    :param cnv_data: a dataframe obtained from
+      get_tcga_cnv() or get_tcga_value()
+    :param phenotype_data: a dataframe based derived from data referenced by
+      FLAGS.cnv_data_phenotypes
+    :return: a merged dataframe that combines CNV value/threshold data with CNV
+     phenotype data.
     """
     cnv = TcgaCnvParser.get_tcga_cnv() if cnv_data is None else cnv_data
 
-    phenotypes = datatable.fread(file=os.path.join(FLAGS.data_directory, 'TCGA_phenotype_denseDataOnlyDownload.tsv')
-                                 ).to_pandas()[['sample', 'sample_type', '_primary_disease']].rename(
-      columns={'sample': 'Sample', 'sample_type': 'sample.type', '_primary_disease': 'primary_disease'}).sort_values(
-      by=['Sample']).set_index('Sample')
+    if phenotype_data is None:
+      phenotype_data = datatable.fread(
+        file=os.path.join(FLAGS.data_directory, FLAGS.cnv_data_phenotypes)
+      ).to_pandas()[['sample', 'sample_type', '_primary_disease']].rename(
+        columns={
+          'sample': 'Sample',
+          'sample_type': 'sample.type',
+          '_primary_disease': 'primary_disease',
+        }).sort_values(by=['Sample']).set_index('Sample')
 
-    return cnv.join(phenotypes, how='inner')
+    return cnv.join(phenotype_data, how='inner')
 
-
-# TODO(dlroxe): most code below this point is commented-out with docstring-style quotes, until it can be
-# translated from R to Python.  After that is done, it probably should/will be reorganized into a class
-# structure, as well.
-
-def get_top_genes(df, label, percent):
-  pass
-  """
-  sample_number <- nrow(df)
-
-  TOP_AMP <- df %>%
-    tibble::rownames_to_column(var = "rowname") %>%
-    reshape2::melt(id.vars = "rowname", variable.name = "Gene") %>%
-    dplyr::filter(value %in% label) %>%
-    dplyr::group_by(Gene) %>%
-    dplyr::summarise(Percent = n() / sample_number * 100) %>%
-    dplyr::filter(Percent > percent) %>%
-    droplevels() %>%
-    dplyr::mutate(entrez = AnnotationDbi::mapIds(org.Hs.eg.db,
-                                                 keys = as.character(.data$Gene),
-                                                 column = "ENTREZID",
-                                                 keytype = "SYMBOL",
-                                                 multiVals = "first"
-    ))
-  return(TOP_AMP)
-}
-"""
-
-
-def coocurrance_analysis(df, gene01, gene02, cnv_1, cnv_2):
-  pass
-
-
-"""
-coocurrance_analysis <- function(df, gene01, gene02, cnv_1, cnv_2) {
-  EIF <- df %>%
-    dplyr::select(dplyr::all_of(c(gene01, gene02))) %>%
-    mutate(
-      !!gene01 := ifelse((!!as.name(gene01) == cnv_1 | !!as.name(gene01) == cnv_2),
-        !!paste(gene01, cnv_1, cnv_2),
-        !!paste(gene01, "NO", cnv_1, cnv_2)
-      ),
-      !!gene02 := ifelse((!!as.name(gene02) == cnv_1 | !!as.name(gene02) == cnv_2),
-        !!paste(gene02, cnv_1, cnv_2),
-        !!paste(gene02, "NO", cnv_1, cnv_2)
-      )
+  @classmethod
+  def get_top_genes(
+      cls,
+      df: pandas.DataFrame,
+      labels: List[str],
+      percent: int,
+      entrez_handle: entrez_lookup.EntrezLookup,
+  ) -> pandas.DataFrame:
+    sample_number = len(df.index)
+    df.index.name = 'rowname'
+    # Extra outer parens here permit easy formatting that starts each chained
+    # function call on its own line.
+    return (
+      df
+      .reset_index()
+      .melt(id_vars=['rowname'], var_name='Gene', value_name='Value',
+            ignore_index=True)
+      .set_index('rowname')
+      .loc[lambda x: x['Value'].isin(labels)]
+      .groupby(by='Gene')
+      .count()
+      .apply(lambda x: 100 * x / sample_number)
+      .loc[lambda x: x['Value'] > percent]
+      .reset_index()
+      .assign(
+        entrez=lambda x: x['Gene'].apply(
+          entrez_handle.translate_gene_symbol_to_entrez_id))
     )
-  file_name <- paste(file.path(output_directory, "Fig1"),
-    "/",
-    gene01,
-    gene02,
-    cnv_1,
-    cnv_2,
-    ".xlsx",
-    sep = ""
-  )
-  xlsx::write.xlsx(as.data.frame.matrix(table(EIF[, gene01], EIF[, gene02])),
-    file = file_name,
-    sheetName = "1", row.names = TRUE
-  )
-  xlsx::write.xlsx(fisher.test(EIF[, gene01], EIF[, gene02], alternative = "greater") %>%
-    broom::tidy(),
-  file = file_name,
-  sheetName = "Fisheroneside", append = TRUE, row.names = FALSE
-  )
-  xlsx::write.xlsx(chisq.test(EIF[, gene01], EIF[, gene02]) %>%
-    broom::tidy(),
-  file = file_name,
-  sheetName = "chitest", append = TRUE, row.names = FALSE
-  )
-}
 
-## function calling ============================================================
-#
-xlsx::write.xlsx2(get_top_genes(df = TCGA_CNV, label = "AMP", 5),
-                  file = paste(file.path(output_directory, "Fig1"),
-                               "/TOP_AMP_genes.xlsx",
-                               sep = ""
-                  ),
-                  sheetName = "1", row.names = TRUE
-)
+  # TODO(dlroxe): Fix up the function docstring below.
+  @classmethod
+  def cooccurance_analysis(cls, df: pandas.DataFrame, gene01: str, gene02: str,
+                           cnv_spec: List[str]) -> None:
+    """
+    For example, 'sheet 1' should have something like this:
 
-xlsx::write.xlsx2(as.data.frame(TOP_AMP_PATH@result),
-                  file = paste(file.path(output_directory, "Fig1"),
-                               "/TOP_AMP_genes.xlsx",
-                               sep = ""
-                  ),
-                  sheetName = "2", append = TRUE, row.names = FALSE
-)
+                          EIF3H_AMP_DUP    EIF3H_NO_AMP_DUP
+        EIF4G1_AMP_DUP    2220             1233
+        EIF4G1_NO_AMP_DUP 2528             4864
 
-#
-xlsx::write.xlsx2(get_top_genes(df = TCGA_CNV, label = c("DUP","AMP"), 30),
-                  file = paste(file.path(output_directory, "Fig1"),
-                               "/TOP_GAIN_genes.xlsx",
-                               sep = ""
-                  ),
-                  sheetName = "1", row.names = TRUE
-)
+    That is: 2220 samples are either AMP|DUP for G1,
+    AND ALSO are either AMP|DUP for 3H.
+    """
+    df = df[[gene01, gene02]]
 
-xlsx::write.xlsx2(as.data.frame(TOP_GAIN_PATH@result),
-                  file = paste(file.path(output_directory, "Fig1"),
-                               "/TOP_GAIN_genes.xlsx",
-                               sep = ""
-                  ),
-                  sheetName = "2", append = TRUE, row.names = FALSE
-)
+    # TODO(dlroxe): Consider using 'crosstab' for this.
+    gene01y_gene02y = len(
+      df[df[gene01].isin(cnv_spec) & df[gene02].isin(cnv_spec)])
+    gene01y_gene02n = len(
+      df[df[gene01].isin(cnv_spec) & ~df[gene02].isin(cnv_spec)])
+    gene01n_gene02y = len(
+      df[~df[gene01].isin(cnv_spec) & df[gene02].isin(cnv_spec)])
+    gene01n_gene02n = len(
+      df[~df[gene01].isin(cnv_spec) & ~df[gene02].isin(cnv_spec)])
 
-#
-xlsx::write.xlsx2(get_top_genes(df = TCGA_CNV, label = "HOMDEL", 5),
-                  file = paste(file.path(output_directory, "Fig1"),
-                               "/TOP_HOMDEL_genes.xlsx",
-                               sep = ""
-                  ),
-                  sheetName = "1", row.names = TRUE
-)
+    def row_or_col_name(gene: str, matches_cnv_spec: bool) -> str:
+      """Returns e.g. EIF4G1_AMP_DUP, EIF4G1_NO_AMP_DUP, EIF4G1_AMP, etc."""
+      components = [
+        x for x in
+        ([gene, None if matches_cnv_spec else 'NO'] + cnv_spec) if x]
+      return ' '.join(components)
 
-xlsx::write.xlsx2(as.data.frame(TOP_HOMDEL_PATH@result),
-                  file = paste(file.path(output_directory, "Fig1"),
-                               "/TOP_HOMDEL_genes.xlsx",
-                               sep = ""
-                  ),
-                  sheetName = "2", append = TRUE, row.names = FALSE
-)
+    eif = pandas.DataFrame(
+      data={
+        row_or_col_name(gene=gene02, matches_cnv_spec=True):
+          [gene01y_gene02y, gene01n_gene02y],
+        row_or_col_name(gene=gene02, matches_cnv_spec=False):
+          [gene01y_gene02n, gene01n_gene02n],
+      },
+      index=[
+        row_or_col_name(gene=gene01, matches_cnv_spec=True),
+        row_or_col_name(gene=gene01, matches_cnv_spec=False),
+      ])
 
-##
-coocurrance_analysis(df = TCGA_CNV,
-                     gene01 = "EIF4G1",
-                     gene02 = "EIF3E",
-                     cnv_1 = "AMP",
-                     cnv_2 = "AMP")  
+    logging.info('got adjusted counts:\n%s', eif)
 
-coocurrance_analysis(df = TCGA_CNV,
-                     gene01 = "EIF4G1",
-                     gene02 = "EIF3E",
-                     cnv_1 = "AMP",
-                     cnv_2 = "DUP")  
+    odds_ratio, p_value = stats.fisher_exact(eif, alternative='greater')
+    fisher = pandas.DataFrame(
+      data={'Odds Ratio': [odds_ratio], 'P Value': [p_value]})
+    logging.info('got fisher test:\n%s', fisher)
 
-coocurrance_analysis(df = TCGA_CNV,
-                     gene01 = "EIF4G1",
-                     gene02 = "EIF3H",
-                     cnv_1 = "AMP",
-                     cnv_2 = "AMP")  
+    chi_sq, p_value = stats.chisquare(eif)
+    chi_test = pandas.DataFrame(
+      data={'Chi-Squared': [chi_sq], 'P Value': [p_value]})
+    logging.info('got chi-sq test:\n%s', chi_test)
 
-coocurrance_analysis(df = TCGA_CNV,
-                     gene01 = "EIF4G1",
-                     gene02 = "EIF3H",
-                     cnv_1 = "AMP",
-                     cnv_2 = "DUP")  
-"""
+    excel_output_file = os.path.join(
+      FLAGS.output_directory, "Fig1",
+      '_'.join([gene01, gene02] + cnv_spec) + '.xlsx')
+    with pandas.ExcelWriter(path=excel_output_file) as writer:
+      # TODO(dlroxe): rownames=True, then False, False
+      eif.to_excel(writer, sheet_name='1')
+      fisher.to_excel(writer, sheet_name='Fisheroneside')
+      chi_test.to_excel(writer, sheet_name='chi_test')
 
 
 def main(argv):
+  # TODO(dlroxe): Decide whether logging to stdout is desired in the long term.
+  logging.get_absl_handler().python_handler.stream = sys.stdout
   eif_genes = ["EIF4G1", "EIF3E", "EIF3H", ]
 
-  all_data = TcgaCnvParser.get_tcga_cnv_value(raw_data_file='Gistic2_CopyNumber_Gistic2_all_data_by_genes')
-  print(f'all data\n{all_data}')
+  all_data = TcgaCnvParser.get_tcga_cnv_value(
+    raw_data_file=FLAGS.cnv_data_by_gene_values)
+  logging.info('all data\n%s', all_data)
 
-  all_threshold_data = TcgaCnvParser.get_tcga_cnv()
-  # TODO(dlroxe): probably just eliminate 'genes_of_interest' from the
-  # get_tcga_cnv() function; there doesn't seem to be much point considering the flexibility
-  # we have here with the [] operator.
-  # eif_threshold_data = TcgaCnvParser.get_tcga_cnv(genes_of_interest=eif_genes)
+  raw_threshold_data = TcgaCnvParser.get_tcga_cnv_value(
+    raw_data_file=FLAGS.cnv_data_by_gene_thresholds)
+  all_threshold_data = TcgaCnvParser.get_tcga_cnv(
+    values_data_frame=raw_threshold_data)
   eif_threshold_data = all_threshold_data[eif_genes]
-  print(f'eif threshold data\n{eif_threshold_data}')
+  logging.info('eif threshold data\n%s', eif_threshold_data)
 
-  merged_phenotyped_data = TcgaCnvParser.merge_cnv_phenotypes(all_threshold_data)
-  print(f'all threshold data, merged with phenotypes:\n{merged_phenotyped_data}')
+  merged_phenotyped_data = TcgaCnvParser.merge_cnv_phenotypes(
+    all_threshold_data)
+  logging.info('all threshold data, merged with phenotypes:\n%s',
+               merged_phenotyped_data)
+
+  # TOP_AMP_PATH, TOP_GAIN_PATH, TOP_HOMDEL_PATH are omitted for the time being,
+  # because pathway analysis is harder in Python than in R.
+  # What an absurd incantation to resolve "~" on Windows (which open() can't
+  # handle); but OK. Thanks, StackOverflow.
+  hs_file = os.path.abspath(os.path.expanduser(
+    os.path.expandvars(os.path.join(FLAGS.data_directory, FLAGS.hs_data))))
+  entrez_handle = entrez_lookup.EntrezLookup(hs_file)
+
+  top_amp_genes = TcgaCnvParser.get_top_genes(df=all_threshold_data,
+                                              labels=["AMP"], percent=5,
+                                              entrez_handle=entrez_handle)
+  logging.info('top amp genes:\n%s', top_amp_genes)
+
+  top_gain_genes = TcgaCnvParser.get_top_genes(df=all_threshold_data,
+                                               labels=["DUP", "AMP"],
+                                               percent=30,
+                                               entrez_handle=entrez_handle)
+  logging.info('top gain genes:\n%s', top_gain_genes)
+
+  top_homdel_genes = TcgaCnvParser.get_top_genes(df=all_threshold_data,
+                                                 labels=["HOMDEL"], percent=5,
+                                                 entrez_handle=entrez_handle)
+  logging.info('top homdel genes:\n%s', top_homdel_genes)
+
+  top_genes_base_path = os.path.join(FLAGS.output_directory, "Fig1")
+  with pandas.ExcelWriter(
+      path=os.path.join(top_genes_base_path, 'TOP_AMP_genes.xlsx')) as writer:
+    # TODO(dlroxe): rownames=True
+    top_amp_genes.to_excel(writer, sheet_name='1')
+    # TODO(dlroxe): add TOP_AMP_PATH to sheet 2
+
+  with pandas.ExcelWriter(
+      path=os.path.join(top_genes_base_path, 'TOP_GAIN_genes.xlsx')) as writer:
+    # TODO(dlroxe): rownames=True
+    top_gain_genes.to_excel(writer, sheet_name='1')
+    # TODO(dlroxe): add TOP_GAIN_PATH to sheet 2
+
+  with pandas.ExcelWriter(path=os.path.join(top_genes_base_path,
+                                            'TOP_HOMDEL_genes.xlsx')) as writer:
+    # TODO(dlroxe): rownames=True
+    top_homdel_genes.to_excel(writer, sheet_name='1')
+    # TODO(dlroxe): add TOP_HOMDEL_PATH to sheet 2
+
+  logging.info('"top genes" analyses have been written under %s.',
+               top_genes_base_path)
+
+  logging.info('attempting cooccurance analysis 1')
+  TcgaCnvParser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1",
+                                     gene02="EIF3E", cnv_spec=["AMP", ])
+
+  logging.info('attempting coocurrance analysis 2')
+  TcgaCnvParser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1",
+                                     gene02="EIF3E", cnv_spec=["AMP", "DUP"])
+
+  logging.info('attempting coocurrance analysis 3')
+  TcgaCnvParser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1",
+                                     gene02="EIF3H", cnv_spec=["AMP", ])
+
+  logging.info('attempting coocurrance analysis 4')
+  TcgaCnvParser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1",
+                                     gene02="EIF3H", cnv_spec=["AMP", "DUP"])
+
+  logging.info('processing complete')
 
 
 if __name__ == "__main__":

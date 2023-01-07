@@ -11,9 +11,11 @@ py_install("matplotlib_venn", method = "conda", pip = TRUE)
 py_install("mygene", method = "conda", pip = TRUE)
 py_install("networkx", method = "conda")
 py_install("numpy", method = "conda")
-py_install("pygraphviz", method = "conda")
 py_install("pylab", method = "conda")
 py_install("seaborn", method = "conda")
 py_install("scipy", method = "conda")
+py_install("umap", method = "conda", pip = TRUE)
 
-
+py_install("heatmap-grammar", method = "conda", pip = TRUE)
+py_install("bioinfokit", method = "conda", pip = TRUE)
+py_install("statannot", method = "conda")
