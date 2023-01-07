@@ -28,9 +28,12 @@ from typing import List, Optional
 
 import datatable
 import entrez_lookup
+import org_hs_eg_db_lookup
 import os
 import pandas
+import sqlite3
 import sys
+import textwrap
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string('data_directory',
@@ -59,6 +62,14 @@ flags.DEFINE_string('hs_data', 'Hs.data',
                     'unzipped contents of '
                     'ftp.ncbi.nih.gov/'
                     'repository/UniGene/Homo_sapiens/Hs.data.gz')
+flags.DEFINE_string('org_hs_eg_sqlite',
+                    'org.Hs.eg.db/inst/extdata/org.Hs.eg.sqlite',
+                    'the path, relative to data_directory, where the database '
+                    'underlying the "org.Hs.eg.db" package may be found. '
+                    'This package may be obtained via the "Source Package "'
+                    'link at '
+                    'https://bioconductor.org/packages/release/data/annotation/html/org.Hs.eg.db.html '
+                    'and deployed to the data_directory using "tar -xzvf".')
 
 
 class TcgaCnvParser:
@@ -204,7 +215,7 @@ class TcgaCnvParser:
       df: pandas.DataFrame,
       labels: List[str],
       percent: int,
-      entrez_handle: entrez_lookup.EntrezLookup,
+      genedb_handle: org_hs_eg_db_lookup.OrgHsEgDbLookup,
   ) -> pandas.DataFrame:
     sample_number = len(df.index)
     df.index.name = 'rowname'
@@ -224,7 +235,7 @@ class TcgaCnvParser:
       .reset_index()
       .assign(
         entrez=lambda x: x['Gene'].apply(
-          entrez_handle.translate_gene_symbol_to_entrez_id))
+          genedb_handle.translate_gene_symbol_to_entrez_id))
     )
 
   # TODO(dlroxe): Fix up the function docstring below.
@@ -294,9 +305,15 @@ class TcgaCnvParser:
       chi_test.to_excel(writer, sheet_name='chi_test')
 
 
-def main(argv):
+def _abspath(path):
+  # What an absurd incantation to resolve "~"; but OK. Thanks, StackOverflow.
+  return os.path.abspath(os.path.expanduser(os.path.expandvars(path)))
+
+
+def main(unused_argv):
   # TODO(dlroxe): Decide whether logging to stdout is desired in the long term.
   logging.get_absl_handler().python_handler.stream = sys.stdout
+
   eif_genes = ["EIF4G1", "EIF3E", "EIF3H", ]
 
   all_data = TcgaCnvParser.get_tcga_cnv_value(
@@ -317,26 +334,25 @@ def main(argv):
 
   # TOP_AMP_PATH, TOP_GAIN_PATH, TOP_HOMDEL_PATH are omitted for the time being,
   # because pathway analysis is harder in Python than in R.
-  # What an absurd incantation to resolve "~" on Windows (which open() can't
-  # handle); but OK. Thanks, StackOverflow.
-  hs_file = os.path.abspath(os.path.expanduser(
-    os.path.expandvars(os.path.join(FLAGS.data_directory, FLAGS.hs_data))))
-  entrez_handle = entrez_lookup.EntrezLookup(hs_file)
+  org_hs_eg_db_handle = org_hs_eg_db_lookup.OrgHsEgDbLookup(
+    _abspath(os.path.join(FLAGS.data_directory, FLAGS.org_hs_eg_sqlite)))
 
-  top_amp_genes = TcgaCnvParser.get_top_genes(df=all_threshold_data,
-                                              labels=["AMP"], percent=5,
-                                              entrez_handle=entrez_handle)
+  top_amp_genes = TcgaCnvParser.get_top_genes(
+    df=all_threshold_data, labels=["AMP"], percent=5,
+    genedb_handle=org_hs_eg_db_handle)
   logging.info('top amp genes:\n%s', top_amp_genes)
 
-  top_gain_genes = TcgaCnvParser.get_top_genes(df=all_threshold_data,
-                                               labels=["DUP", "AMP"],
-                                               percent=30,
-                                               entrez_handle=entrez_handle)
+  top_gain_genes = TcgaCnvParser.get_top_genes(
+    df=all_threshold_data,
+    labels=["DUP", "AMP"],
+    percent=30,
+    genedb_handle=org_hs_eg_db_handle)
   logging.info('top gain genes:\n%s', top_gain_genes)
 
-  top_homdel_genes = TcgaCnvParser.get_top_genes(df=all_threshold_data,
-                                                 labels=["HOMDEL"], percent=5,
-                                                 entrez_handle=entrez_handle)
+  top_homdel_genes = TcgaCnvParser.get_top_genes(
+    df=all_threshold_data,
+    labels=["HOMDEL"], percent=5,
+    genedb_handle=org_hs_eg_db_handle)
   logging.info('top homdel genes:\n%s', top_homdel_genes)
 
   top_genes_base_path = os.path.join(FLAGS.output_directory, "Fig1")
