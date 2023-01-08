@@ -36,18 +36,28 @@ class OrgHsEgDbLookup:
       select
         gene_id
       from
-       alias2entrez
+       name2entrez
       where
-       alias_symbol = '{short_gene_symbol}'
+       symbol = '{short_gene_symbol}'
     '''), verbose=False)
-    if len(rows) != 1:
-      def descriptor():
-        if short_gene_symbol == gene_symbol:
-          return f'{short_gene_symbol}'
-        return f'{short_gene_symbol} ({gene_symbol})'
 
-      logging.warning(
-        'found %s Entrez ID rows for %s', len(rows), descriptor())
+    def descriptor(rows: List[sqlite3.Row]) -> str:
+      if short_gene_symbol == gene_symbol:
+        gene_id = f'{short_gene_symbol}'
+      else:
+        gene_id = f'{short_gene_symbol} ({gene_symbol})'
+
+      if len(rows) > 1:
+        return gene_id + ' (' + ', '.join([row[0] for row in rows]) + ' )'
+      return gene_id
+
+    msg = 'found %s Entrez ID rows for %s'
+    if len(rows) > 1:
+      logging.error(msg, len(rows), descriptor(rows))
+
+    if len(rows) == 0:
+      logging.warning(msg, len(rows), descriptor(rows))
+
     return rows[0][0] if rows else None
 
   def _init_memdb(self, org_hs_eg_db_file: str) -> None:
@@ -59,14 +69,14 @@ class OrgHsEgDbLookup:
       self._memdb.executescript("".join(line for line in diskdb.iterdump()))
       self._memdb.commit()
 
-      logging.info('creating alias-entrez lookup table')
+      logging.info('creating name-entrez lookup table')
       self._execute(cmd=textwrap.dedent('''
-        create table alias2entrez as
+        create table name2entrez as
           select
-            alias_symbol,
+            symbol,
             gene_id
           from
-            alias cross join genes on alias._id = genes._id
+            gene_info cross join genes on gene_info._id = genes._id
         ;
         '''), verbose=True)
       self._memdb.commit()
