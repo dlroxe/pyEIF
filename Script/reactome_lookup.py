@@ -21,8 +21,17 @@ import sqlite3
 #               corresponding R code uses (reactome.db), which offers
 #               bug-for-bug compatibility.
 #
-#               However that may not be easily feasible, so instead it may
-#               make sense to use the "latest" data here:
+#               A possible mapping at the SQLIte level might be:
+#               GenomeEncodedEntity
+#               [==>CatalystActivity]
+#               ==> ReactionLikeEvent
+#               ==> Pathway
+#
+#               However it's not so clear e.g. how the "p value cutoff"
+#               from ReactomePA::enrichPathway() could be brought to bear.
+#               Thus, this appraoch may not be easily feasible, so instead it
+#               may make sense to use the "latest" data here (albeit with the
+#               same problem for p value):
 #
 #               https://reactome.org/download/current/NCBI2Reactome.txt
 #
