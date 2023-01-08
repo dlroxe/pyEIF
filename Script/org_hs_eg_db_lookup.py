@@ -3,11 +3,11 @@ This file provides abstractions for org.Hs.eg.db lookups.
 
 The BioConductor project maintains an 'org.Hs.eg.db' package for the R language,
 which is versioned and periodically updated with a fresh snapshot of
-publicly-available data.  At the core of that package is an SqlLite database.
+publicly-available data.  At the core of that package is an SQLite database.
 
 This module assumes that the source code for that package has been downloaded
 and installed, and provides lookup functions against the contents of the
-SqlLite database it contains.
+SQLite database it contains.
 """
 from absl import logging
 from typing import List

@@ -31,6 +31,7 @@ import entrez_lookup
 import org_hs_eg_db_lookup
 import os
 import pandas
+import reactome_lookup
 import sqlite3
 import sys
 import textwrap
@@ -66,10 +67,18 @@ flags.DEFINE_string('org_hs_eg_sqlite',
                     'org.Hs.eg.db/inst/extdata/org.Hs.eg.sqlite',
                     'the path, relative to data_directory, where the database '
                     'underlying the "org.Hs.eg.db" package may be found. '
-                    'This package may be obtained via the "Source Package "'
+                    'This package may be obtained via the "Source Package" '
                     'link at '
                     'https://bioconductor.org/packages/release/data/annotation/html/org.Hs.eg.db.html '
                     'and deployed to the data_directory using "tar -xzvf".')
+flags.DEFINE_string('reactome_sqlite',
+                    'reactome.db/inst/extdata/reactome.sqlite',
+                    'the path, relative to data_directory, where the database '
+                    'underlying the "reactome.db" package may be found.  '
+                    'This package may be obtained via the "Source Package" '
+                    'link at '
+                    'https://bioconductor.org/packages/release/data/annotation/html/reactome.db.html '
+                    'and deployed to the data_directory using "tar -zxvf".')
 
 # force exceptions for bad chains of pandas operations
 pandas.options.mode.chained_assignment = 'raise'
@@ -344,6 +353,17 @@ def main(unused_argv):
 
   # TOP_AMP_PATH, TOP_GAIN_PATH, TOP_HOMDEL_PATH are omitted for the time being,
   # because pathway analysis is harder in Python than in R.
+  # The corresponding R code invokes ReactomePA::enrichPathway(),
+  # which is implemented using 'enricher_internal()', which is defined here:
+  #
+  # https://github.com/YuLab-SMU/DOSE/blob/37572b5a462843dd2478ecf4bcf583bbedd1a357/R/enricher_internal.R
+  #
+  # It may be possible to build similar functionality in Python on top of the
+  # same SQLite database used by the Reactome package:
+  #
+  # reactome_db_handle = reactome_lookup.ReactomeLookup(
+  #  _abspath(os.path.join(FLAGS.data_directory, FLAGS.reactome_sqlite)))
+
   org_hs_eg_db_handle = org_hs_eg_db_lookup.OrgHsEgDbLookup(
     _abspath(os.path.join(FLAGS.data_directory, FLAGS.org_hs_eg_sqlite)))
 
