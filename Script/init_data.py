@@ -27,14 +27,13 @@ from scipy import stats
 from typing import List, Optional
 
 import datatable
-import entrez_lookup
+# import entrez_lookup
 import org_hs_eg_db_lookup
 import os
 import pandas
-import reactome_lookup
-import sqlite3
+# import reactome_lookup
 import sys
-import textwrap
+
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string('data_directory',
@@ -79,6 +78,27 @@ flags.DEFINE_string('reactome_sqlite',
                     'link at '
                     'https://bioconductor.org/packages/release/data/annotation/html/reactome.db.html '
                     'and deployed to the data_directory using "tar -zxvf".')
+
+# TODO(dlroxe): The 'path' flags that follow should be redesigned, to obtain
+#               data either from the output directory (after an R script has
+#               executed) or from data files checked into version-control.
+#               The files mentioned here are 1,124, 51,044, and 6,055 bytes
+#               in size, respectively -- quite manageable.
+flags.DEFINE_string('top_amp_path',
+                    'top-amp-path.csv',
+                    'the path, relative to data_directory, of the '
+                    'csv-formatted data frame that describes gene pathways as '
+                    'evaluated by Fig1.R.')
+flags.DEFINE_string('top_gain_path',
+                    'top-gain-path.csv',
+                    'the path, relative to data_directory, of the '
+                    'csv-formatted data frame that describes gene pathways as '
+                    'evaluated by Fig1.R.')
+flags.DEFINE_string('top_homdel_path',
+                    'top-homdel-path.csv',
+                    'the path, relative to data_directory, of the '
+                    'csv-formatted data frame that describes gene pathways as '
+                    'evaluated by Fig1.R.')
 
 # force exceptions for bad chains of pandas operations
 pandas.options.mode.chained_assignment = 'raise'
@@ -351,9 +371,11 @@ def main(unused_argv):
   logging.info('all threshold data, merged with phenotypes:\n%s',
                merged_phenotyped_data)
 
-  # TOP_AMP_PATH, TOP_GAIN_PATH, TOP_HOMDEL_PATH are omitted for the time being,
-  # because pathway analysis is harder in Python than in R.
-  # The corresponding R code invokes ReactomePA::enrichPathway(),
+  # TOP_AMP_PATH, TOP_GAIN_PATH, TOP_HOMDEL_PATH are obtained from R-generated
+  # CSV files for the time being, because pathway analysis is harder in Python
+  # than in R.
+  #
+  # The relevant R code invokes ReactomePA::enrichPathway(),
   # which is implemented using 'enricher_internal()', which is defined here:
   #
   # https://github.com/YuLab-SMU/DOSE/blob/37572b5a462843dd2478ecf4bcf583bbedd1a357/R/enricher_internal.R
@@ -367,11 +389,15 @@ def main(unused_argv):
   org_hs_eg_db_handle = org_hs_eg_db_lookup.OrgHsEgDbLookup(
     _abspath(os.path.join(FLAGS.data_directory, FLAGS.org_hs_eg_sqlite)))
 
+  top_amp_path = datatable.fread(
+    file=os.path.join(FLAGS.data_directory, FLAGS.top_amp_path)).to_pandas()
   top_amp_genes = TcgaCnvParser.get_top_genes(
     df=all_threshold_data, labels=["AMP"], percent=5,
     genedb_handle=org_hs_eg_db_handle)
   logging.info('top amp genes:\n%s', top_amp_genes)
 
+  top_gain_path = datatable.fread(
+    file=os.path.join(FLAGS.data_directory, FLAGS.top_gain_path)).to_pandas()
   top_gain_genes = TcgaCnvParser.get_top_genes(
     df=all_threshold_data,
     labels=["DUP", "AMP"],
@@ -379,6 +405,8 @@ def main(unused_argv):
     genedb_handle=org_hs_eg_db_handle)
   logging.info('top gain genes:\n%s', top_gain_genes)
 
+  top_homdel_path = datatable.fread(
+    file=os.path.join(FLAGS.data_directory, FLAGS.top_homdel_path)).to_pandas()
   top_homdel_genes = TcgaCnvParser.get_top_genes(
     df=all_threshold_data,
     labels=["HOMDEL"], percent=5,
@@ -390,19 +418,19 @@ def main(unused_argv):
       path=os.path.join(top_genes_base_path, 'TOP_AMP_genes.xlsx')) as writer:
     # TODO(dlroxe): rownames=True
     top_amp_genes.to_excel(writer, sheet_name='1')
-    # TODO(dlroxe): add TOP_AMP_PATH to sheet 2
+    top_amp_path.to_excel(writer, sheet_name='2')
 
   with pandas.ExcelWriter(
       path=os.path.join(top_genes_base_path, 'TOP_GAIN_genes.xlsx')) as writer:
     # TODO(dlroxe): rownames=True
     top_gain_genes.to_excel(writer, sheet_name='1')
-    # TODO(dlroxe): add TOP_GAIN_PATH to sheet 2
+    top_gain_path.to_excel(writer, sheet_name='2')
 
   with pandas.ExcelWriter(path=os.path.join(top_genes_base_path,
                                             'TOP_HOMDEL_genes.xlsx')) as writer:
     # TODO(dlroxe): rownames=True
     top_homdel_genes.to_excel(writer, sheet_name='1')
-    # TODO(dlroxe): add TOP_HOMDEL_PATH to sheet 2
+    top_homdel_path.to_excel(writer, sheet_name='2')
 
   logging.info('"top genes" analyses have been written under %s.',
                top_genes_base_path)
