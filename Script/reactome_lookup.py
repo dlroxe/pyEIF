@@ -26,10 +26,16 @@ import sqlite3
 #
 #               https://reactome.org/download/current/NCBI2Reactome.txt
 #
+#               Another way might be to use "rpy2" to invoke the underlying
+#               R package just enough to make it print a CSV file with the
+#               needed data frame.  That is probably more trouble than it's
+#               worth; for example a shell script could invoke the R file to
+#               do something similar.
+#
 #               Yet another approach would be to use the reactome.org
 #               REST API to download all required data in JSON format,
 #               and parse it e.g. with Protocol Buffers.  (This approach
-#               probably has the least merit.
+#               probably has the least merit.)
 
 class ReactomeLookup:
   """

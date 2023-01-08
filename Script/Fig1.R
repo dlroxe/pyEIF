@@ -1,4 +1,4 @@
-source("~/github/pyEIF/Script/Load.R")
+source("Script/Load.R")
 ## CNV analysis of all TCGA tumors =============================================
 .get_TCGA_CNV <- function() {
   .TCGA_pancancer <- data.table::fread(
