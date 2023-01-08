@@ -31,17 +31,23 @@ class OrgHsEgDbLookup:
 
   def translate_gene_symbol_to_entrez_id(self, gene_symbol: str) -> str:
     """Returns the Entrez ID for 'gene_symbol', or None if lookup fails."""
+    short_gene_symbol = gene_symbol.split('|')[0]
     rows = self._execute(textwrap.dedent(f'''\
       select
         gene_id
       from
        alias2entrez
       where
-       alias_symbol = '{gene_symbol}'
+       alias_symbol = '{short_gene_symbol}'
     '''), verbose=False)
     if len(rows) != 1:
+      def descriptor():
+        if short_gene_symbol == gene_symbol:
+          return f'{short_gene_symbol}'
+        return f'{short_gene_symbol} ({gene_symbol})'
+
       logging.warning(
-        f'found {len(rows)} Entrez ID rows for {gene_symbol}: {rows}')
+        'found %s Entrez ID rows for %s', len(rows), descriptor())
     return rows[0][0] if rows else None
 
   def _init_memdb(self, org_hs_eg_db_file: str) -> None:

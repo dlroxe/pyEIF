@@ -71,6 +71,9 @@ flags.DEFINE_string('org_hs_eg_sqlite',
                     'https://bioconductor.org/packages/release/data/annotation/html/org.Hs.eg.db.html '
                     'and deployed to the data_directory using "tar -xzvf".')
 
+# force exceptions for bad chains of pandas operations
+pandas.options.mode.chained_assignment = 'raise'
+
 
 class TcgaCnvParser:
   """
@@ -124,12 +127,16 @@ class TcgaCnvParser:
     input_file = os.path.join(FLAGS.data_directory, raw_data_file)
     logging.info('reading from %s', input_file)
 
-    return (
-      datatable.fread(file=input_file).to_pandas()
-      .sort_values(by=['Sample'])
-      .set_index('Sample')
-      .transpose()
-    )
+    # Unfortunately, pandas documentation suggests that chaining is prone
+    # to failure:
+    # http://pandas.pydata.org/pandas-docs/dev/user_guide/indexing.html#returning-a-view-versus-a-copy
+    #
+    # So, 'df' is referenced repeatedly.  OTOH, this approach is probably
+    # more memory efficient.
+    df = datatable.fread(file=input_file).to_pandas()
+    df.sort_values(by=['Sample'], inplace=True)
+    df.set_index('Sample', inplace=True)
+    return df.transpose()
 
   @classmethod
   def get_tcga_cnv(
@@ -158,7 +165,8 @@ class TcgaCnvParser:
     if values_data_frame is None:
       values_data_frame = cls.get_tcga_cnv_value(
         raw_data_file=FLAGS.cnv_data_by_gene_thresholds)
-    return values_data_frame.replace(cls.cnv_code_mappings)
+    values_data_frame.replace(cls.cnv_code_mappings, inplace=True)
+    return values_data_frame
 
   # TODO(dlroxe): Probably it's worth documenting the join() semantics more
   #               carefully, particularly regarding the indices, in
@@ -200,12 +208,15 @@ class TcgaCnvParser:
     if phenotype_data is None:
       phenotype_data = datatable.fread(
         file=os.path.join(FLAGS.data_directory, FLAGS.cnv_data_phenotypes)
-      ).to_pandas()[['sample', 'sample_type', '_primary_disease']].rename(
+      ).to_pandas()[['sample', 'sample_type', '_primary_disease']]
+      phenotype_data.rename(
         columns={
           'sample': 'Sample',
           'sample_type': 'sample.type',
           '_primary_disease': 'primary_disease',
-        }).sort_values(by=['Sample']).set_index('Sample')
+        }, inplace=True)
+      phenotype_data.sort_values(by=['Sample'], inplace=True)
+      phenotype_data.set_index('Sample', inplace=True)
 
     return cnv.join(phenotype_data, how='inner')
 
@@ -217,26 +228,26 @@ class TcgaCnvParser:
       percent: int,
       genedb_handle: org_hs_eg_db_lookup.OrgHsEgDbLookup,
   ) -> pandas.DataFrame:
-    sample_number = len(df.index)
-    df.index.name = 'rowname'
-    # Extra outer parens here permit easy formatting that starts each chained
-    # function call on its own line.
-    return (
-      df
-      .reset_index()
-      .melt(id_vars=['rowname'], var_name='Gene', value_name='Value',
-            ignore_index=True)
-      .set_index('rowname')
-      .loc[lambda x: x['Value'].isin(labels)]
-      .groupby(by='Gene')
-      .count()
-      .apply(lambda x: 100 * x / sample_number)
-      .loc[lambda x: x['Value'] > percent]
-      .reset_index()
-      .assign(
-        entrez=lambda x: x['Gene'].apply(
-          genedb_handle.translate_gene_symbol_to_entrez_id))
-    )
+    sample_count = len(df.index)  # save number of samples before alterations
+
+    # make a copy; then modify the copy in-place
+    df = df.copy(deep=True)
+    df.reset_index(inplace=True)
+    df.rename(columns={"index": "rowname"}, inplace=True)
+
+    # melt() makes another copy, which is then modified in-place
+    df = df.melt(id_vars=['rowname'], var_name='Gene', value_name='Value',
+                 ignore_index=True)
+    df.set_index('rowname', inplace=True)
+    df = df.loc[lambda x: x['Value'].isin(labels)]
+    df = df.groupby(by='Gene').count()
+    df = df.apply(lambda x: 100 * x / sample_count)
+    df = df.loc[lambda x: x['Value'] > percent]
+    df.reset_index(inplace=True)
+    df = df.assign(
+      entrez=lambda x: x['Gene'].apply(
+        genedb_handle.translate_gene_symbol_to_entrez_id))
+    return df
 
   # TODO(dlroxe): Fix up the function docstring below.
   @classmethod
@@ -249,8 +260,7 @@ class TcgaCnvParser:
         EIF4G1_AMP_DUP    2220             1233
         EIF4G1_NO_AMP_DUP 2528             4864
 
-    That is: 2220 samples are either AMP|DUP for G1,
-    AND ALSO are either AMP|DUP for 3H.
+    That is: 2220 samples are AMP|DUP for G1, AND are either AMP|DUP for 3H.
     """
     df = df[[gene01, gene02]]
 
