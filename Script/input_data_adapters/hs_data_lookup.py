@@ -13,8 +13,10 @@ from Bio import UniGene
 from typing import Dict, Optional
 from absl import logging
 
+import genedb_lookup
 
-class EntrezLookup:
+
+class EntrezLookup(genedb_lookup.GeneDBLookup):
   """
   This is a stateful container that implements all methods necessary for
   "Entrez" interactions.  For example, when instantiated, it reads a local
@@ -34,7 +36,7 @@ class EntrezLookup:
     # It may be useful in tests to short-circuit lookups to immediate 'None'.
     self._hs_data_dict = self._init_hs_data(hs_file) if hs_file else None
 
-  def translate_gene_symbol_to_entrez_id(self, gene_symbol):
+  def translate_gene_symbol_to_entrez_id(self, gene_symbol: str) -> str:
     """Returns the Entrez ID for 'gene_symbol', or None if lookup fails."""
     if self._hs_data_dict is None:
       return None

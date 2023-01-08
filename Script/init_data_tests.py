@@ -76,26 +76,26 @@ class UnitTests(absltest.TestCase):
       'TCGA-06-0150-01': ['DIPLOID', 'DIPLOID', 'DIPLOID', 'DIPLOID',
                           'DIPLOID'],
     }).set_index('Sample').transpose()
-    entrez_handle = hs_data_lookup.EntrezLookup(hs_file=None)
+    genedb_handle = hs_data_lookup.EntrezLookup(hs_file=None)
     top_genes = init_data.TcgaCnvParser.get_top_genes  # for convenience
     top_genes01 = top_genes(threshold_data, labels=['AMP'], percent=30,
-                            genedb_handle=entrez_handle)
+                            genedb_handle=genedb_handle)
     top_genes02 = top_genes(threshold_data, labels=['AMP'], percent=40,
-                            genedb_handle=entrez_handle)
+                            genedb_handle=genedb_handle)
     top_genes03 = top_genes(threshold_data, labels=['AMP', 'DUP'], percent=30,
-                            genedb_handle=entrez_handle)
+                            genedb_handle=genedb_handle)
     top_genes04 = top_genes(threshold_data, labels=['AMP', 'DUP'], percent=40,
-                            genedb_handle=entrez_handle)
+                            genedb_handle=genedb_handle)
     top_genes05 = top_genes(threshold_data, labels=['AMP', 'DIPLOID', 'DUP'],
-                            percent=30, genedb_handle=entrez_handle)
+                            percent=30, genedb_handle=genedb_handle)
     top_genes06 = top_genes(threshold_data, labels=['AMP', 'DIPLOID', 'DUP'],
-                            percent=60, genedb_handle=entrez_handle)
+                            percent=60, genedb_handle=genedb_handle)
     top_genes07 = top_genes(threshold_data, labels=['AMP', 'DIPLOID', 'DUP'],
-                            percent=70, genedb_handle=entrez_handle)
+                            percent=70, genedb_handle=genedb_handle)
     top_genes08 = top_genes(threshold_data, labels=['DIPLOID'], percent=30,
-                            genedb_handle=entrez_handle)
+                            genedb_handle=genedb_handle)
     top_genes09 = top_genes(threshold_data, labels=['DIPLOID'], percent=60,
-                            genedb_handle=entrez_handle)
+                            genedb_handle=genedb_handle)
 
     # TODO(dlroxe): These are simple assertions about counts.
     #               Add specific tests of gene names and percentages.

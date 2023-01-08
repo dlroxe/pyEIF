@@ -32,6 +32,7 @@ from typing import List, Optional
 
 import datatable
 # import hs_data_lookup
+import genedb_lookup
 import org_hs_eg_db_lookup
 import os
 import pandas
@@ -259,7 +260,7 @@ class TcgaCnvParser:
       df: pandas.DataFrame,
       labels: List[str],
       percent: int,
-      genedb_handle: org_hs_eg_db_lookup.OrgHsEgDbLookup,
+      genedb_handle: genedb_lookup.GeneDBLookup,
   ) -> pandas.DataFrame:
     sample_count = len(df.index)  # save number of samples before alterations
 

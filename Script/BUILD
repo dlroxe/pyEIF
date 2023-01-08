@@ -20,8 +20,14 @@ py_test(
 )
 
 py_library(
+    name = "genedb_lookup",
+    srcs = ["input_data_adapters/genedb_lookup.py"],
+)
+
+py_library(
     name = "hs_data_lookup",
     srcs = ["input_data_adapters/hs_data_lookup.py"],
+    deps = [":genedb_lookup"],
 )
 
 py_test(
@@ -38,4 +44,5 @@ py_test(
 py_library(
     name = "org_hs_eg_db_lookup",
     srcs = ["input_data_adapters/org_hs_eg_db_lookup.py"],
+    deps = [":genedb_lookup"],
 )

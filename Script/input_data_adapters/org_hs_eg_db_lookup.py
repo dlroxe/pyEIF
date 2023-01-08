@@ -12,11 +12,12 @@ SQLite database it contains.
 from absl import logging
 from typing import List
 
+import genedb_lookup
 import sqlite3
 import textwrap
 
 
-class OrgHsEgDbLookup:
+class OrgHsEgDbLookup(genedb_lookup.GeneDBLookup):
   """
   This is a stateful container that opens the org.Hs.eg.db database and
   organizes its contents (e.g. by joining 'alias' and 'genes' tables in a new
