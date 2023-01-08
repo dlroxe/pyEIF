@@ -20,6 +20,10 @@ names they are given in the repositories where they are officially
 maintained.
 """
 
+import sys
+
+sys.path += ['input_data_adapters']
+
 from absl import app
 from absl import flags
 from absl import logging
@@ -27,7 +31,7 @@ from scipy import stats
 from typing import List, Optional
 
 import datatable
-# import entrez_lookup
+# import hs_data_lookup
 import org_hs_eg_db_lookup
 import os
 import pandas

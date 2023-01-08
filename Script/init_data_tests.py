@@ -1,8 +1,12 @@
 """Tests for init_data.py."""
 
+import sys
+
+sys.path += ['input_data_adapters']
+
 from absl.testing import absltest
 
-import entrez_lookup
+import hs_data_lookup
 import init_data
 import pandas
 
@@ -72,7 +76,7 @@ class UnitTests(absltest.TestCase):
       'TCGA-06-0150-01': ['DIPLOID', 'DIPLOID', 'DIPLOID', 'DIPLOID',
                           'DIPLOID'],
     }).set_index('Sample').transpose()
-    entrez_handle = entrez_lookup.EntrezLookup(hs_file=None)
+    entrez_handle = hs_data_lookup.EntrezLookup(hs_file=None)
     top_genes = init_data.TcgaCnvParser.get_top_genes  # for convenience
     top_genes01 = top_genes(threshold_data, labels=['AMP'], percent=30,
                             genedb_handle=entrez_handle)

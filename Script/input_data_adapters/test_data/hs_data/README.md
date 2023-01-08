@@ -1,4 +1,4 @@
-This directory has various data files for evaluating Entrez-related logic.
+This directory has various data files for evaluating Hs.data -related logic.
 
 1. first_20_Hs.data has the first 20 records from Hs.data.
 
