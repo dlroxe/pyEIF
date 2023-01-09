@@ -28,7 +28,8 @@ class UnitTests(absltest.TestCase):
         ['DIPLOID', 'DIPLOID', 'DIPLOID', 'DIPLOID', 'DIPLOID'],
     }).set_index('Sample')
 
-    all_threshold_data = init_data.TcgaCnvParser.get_tcga_cnv(
+    tcga_cnv_parser = init_data.TcgaCnvParser('', '', '', '', '')
+    all_threshold_data = tcga_cnv_parser.get_tcga_cnv(
       values_data_frame=raw_threshold_data)
     self.assertTrue(all_threshold_data.equals(expected_threshold_data),
                     msg=all_threshold_data.compare(expected_threshold_data))
@@ -62,7 +63,8 @@ class UnitTests(absltest.TestCase):
 
     }).set_index('Sample').transpose()
 
-    joined_data = init_data.TcgaCnvParser.merge_cnv_phenotypes(
+    tcga_cnv_parser = init_data.TcgaCnvParser('', '', '', '', '')
+    joined_data = tcga_cnv_parser.merge_cnv_phenotypes(
       cnv_data=threshold_data, phenotype_data=phenotype_data)
 
     self.assertTrue(joined_data.equals(expected_joined_data),

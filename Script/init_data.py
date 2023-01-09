@@ -20,10 +20,6 @@ names they are given in the repositories where they are officially
 maintained.
 """
 
-import sys
-
-sys.path += ['input_data_adapters']
-
 from absl import app
 from absl import flags
 from absl import logging
@@ -31,14 +27,14 @@ from scipy import stats
 from typing import List, Optional
 
 import datatable
-# import hs_data_lookup
-import genedb_lookup
-import org_hs_eg_db_lookup
 import os
 import pandas
-# import reactome_lookup
 import sys
 
+sys.path += ['input_data_adapters']
+
+import genedb_lookup
+import org_hs_eg_db_lookup
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string('data_directory',
@@ -84,24 +80,20 @@ flags.DEFINE_string('reactome_sqlite',
                     'https://bioconductor.org/packages/release/data/annotation/html/reactome.db.html '
                     'and deployed to the data_directory using "tar -zxvf".')
 
-# TODO(dlroxe): The 'path' flags that follow should be redesigned, to obtain
-#               data either from the output directory (after an R script has
-#               executed) or from data files checked into version-control.
-#               The files mentioned here are 1,124, 51,044, and 6,055 bytes
-#               in size, respectively -- quite manageable.
+# Note, these flags designate files in *output_directory*.
 flags.DEFINE_string('top_amp_path',
-                    'top-amp-path.csv',
-                    'the path, relative to data_directory, of the '
+                    'ProcessedData/top-amp-path.csv',
+                    'the path, relative to output_directory, of the '
                     'csv-formatted data frame that describes gene pathways as '
                     'evaluated by Fig1.R.')
 flags.DEFINE_string('top_gain_path',
-                    'top-gain-path.csv',
-                    'the path, relative to data_directory, of the '
+                    'ProcessedData/top-gain-path.csv',
+                    'the path, relative to output_directory, of the '
                     'csv-formatted data frame that describes gene pathways as '
                     'evaluated by Fig1.R.')
 flags.DEFINE_string('top_homdel_path',
-                    'top-homdel-path.csv',
-                    'the path, relative to data_directory, of the '
+                    'ProcessedData/top-homdel-path.csv',
+                    'the path, relative to output_directory, of the '
                     'csv-formatted data frame that describes gene pathways as '
                     'evaluated by Fig1.R.')
 
@@ -124,12 +116,21 @@ class TcgaCnvParser:
     -2.0: 'HOMDEL',
   }
 
-  def __init__(self):
-    pass
+  def __init__(
+      self,
+      data_directory: str,
+      output_directory: str,
+      cnv_data_by_gene_thresholds: str,
+      cnv_data_by_gene_values: str,
+      cnv_data_phenotypes: str,
+  ):
+    self._data_directory = data_directory
+    self._output_directory = output_directory
+    self._cnv_data_by_gene_thresholds = cnv_data_by_gene_thresholds
+    self._cnv_data_by_gene_values = cnv_data_by_gene_values
+    self._cnv_data_phenotypes = cnv_data_phenotypes
 
-  @classmethod
-  def get_tcga_cnv_value(
-      cls, raw_data_file: Optional[str] = None) -> pandas.DataFrame:
+  def get_tcga_cnv_value(self, raw_data_file: str = None) -> pandas.DataFrame:
     """
     Reads raw_data_file and returns a related dataframe.
 
@@ -158,7 +159,7 @@ class TcgaCnvParser:
       directory) containing raw data
     :return: a data frame with samples as rows.
     """
-    input_file = os.path.join(FLAGS.data_directory, raw_data_file)
+    input_file = os.path.join(self._data_directory, raw_data_file)
     logging.info('reading from %s', input_file)
 
     # Unfortunately, pandas documentation suggests that chaining is prone
@@ -172,9 +173,8 @@ class TcgaCnvParser:
     df.set_index('Sample', inplace=True)
     return df.transpose()
 
-  @classmethod
   def get_tcga_cnv(
-      cls,
+      self,
       values_data_frame: Optional[pandas.DataFrame] = None) -> pandas.DataFrame:
     """
     Returns get_tcga_cnv_value(), with numeric cell values replaced by labels.
@@ -197,17 +197,16 @@ class TcgaCnvParser:
     """
     # Note the .replace() call, which just applies the dict, and is very quick.
     if values_data_frame is None:
-      values_data_frame = cls.get_tcga_cnv_value(
-        raw_data_file=FLAGS.cnv_data_by_gene_thresholds)
-    values_data_frame.replace(cls.cnv_code_mappings, inplace=True)
+      values_data_frame = self.get_tcga_cnv_value(
+        raw_data_file=self._cnv_data_by_gene_thresholds)
+    values_data_frame.replace(self.cnv_code_mappings, inplace=True)
     return values_data_frame
 
   # TODO(dlroxe): Probably it's worth documenting the join() semantics more
   #               carefully, particularly regarding the indices, in
   #               merge_cnv_phenotypes().
-  @classmethod
   def merge_cnv_phenotypes(
-      cls,
+      self,
       cnv_data: Optional[pandas.DataFrame] = None,
       phenotype_data: Optional[pandas.DataFrame] = None) -> pandas.DataFrame:
     """
@@ -237,11 +236,11 @@ class TcgaCnvParser:
     :return: a merged dataframe that combines CNV value/threshold data with CNV
      phenotype data.
     """
-    cnv = TcgaCnvParser.get_tcga_cnv() if cnv_data is None else cnv_data
+    cnv = self.get_tcga_cnv() if cnv_data is None else cnv_data
 
     if phenotype_data is None:
       phenotype_data = datatable.fread(
-        file=os.path.join(FLAGS.data_directory, FLAGS.cnv_data_phenotypes)
+        file=os.path.join(self._data_directory, self._cnv_data_phenotypes)
       ).to_pandas()[['sample', 'sample_type', '_primary_disease']]
       phenotype_data.rename(
         columns={
@@ -360,18 +359,26 @@ def main(unused_argv):
 
   eif_genes = ["EIF4G1", "EIF3E", "EIF3H", ]
 
-  all_data = TcgaCnvParser.get_tcga_cnv_value(
+  tcga_cnv_parser = TcgaCnvParser(
+    data_directory=FLAGS.data_directory,
+    output_directory=FLAGS.output_directory,
+    cnv_data_by_gene_thresholds=FLAGS.cnv_data_by_gene_thresholds,
+    cnv_data_by_gene_values=FLAGS.cnv_data_by_gene_values,
+    cnv_data_phenotypes=FLAGS.cnv_data_phenotypes,
+  )
+
+  all_data = tcga_cnv_parser.get_tcga_cnv_value(
     raw_data_file=FLAGS.cnv_data_by_gene_values)
   logging.info('all data\n%s', all_data)
 
-  raw_threshold_data = TcgaCnvParser.get_tcga_cnv_value(
+  raw_threshold_data = tcga_cnv_parser.get_tcga_cnv_value(
     raw_data_file=FLAGS.cnv_data_by_gene_thresholds)
-  all_threshold_data = TcgaCnvParser.get_tcga_cnv(
+  all_threshold_data = tcga_cnv_parser.get_tcga_cnv(
     values_data_frame=raw_threshold_data)
   eif_threshold_data = all_threshold_data[eif_genes]
   logging.info('eif threshold data\n%s', eif_threshold_data)
 
-  merged_phenotyped_data = TcgaCnvParser.merge_cnv_phenotypes(
+  merged_phenotyped_data = tcga_cnv_parser.merge_cnv_phenotypes(
     all_threshold_data)
   logging.info('all threshold data, merged with phenotypes:\n%s',
                merged_phenotyped_data)
@@ -395,15 +402,15 @@ def main(unused_argv):
     _abspath(os.path.join(FLAGS.data_directory, FLAGS.org_hs_eg_sqlite)))
 
   top_amp_path = datatable.fread(
-    file=os.path.join(FLAGS.data_directory, FLAGS.top_amp_path)).to_pandas()
-  top_amp_genes = TcgaCnvParser.get_top_genes(
+    file=os.path.join(FLAGS.output_directory, FLAGS.top_amp_path)).to_pandas()
+  top_amp_genes = tcga_cnv_parser.get_top_genes(
     df=all_threshold_data, labels=["AMP"], percent=5,
     genedb_handle=org_hs_eg_db_handle)
   logging.info('top amp genes:\n%s', top_amp_genes)
 
   top_gain_path = datatable.fread(
-    file=os.path.join(FLAGS.data_directory, FLAGS.top_gain_path)).to_pandas()
-  top_gain_genes = TcgaCnvParser.get_top_genes(
+    file=os.path.join(FLAGS.output_directory, FLAGS.top_gain_path)).to_pandas()
+  top_gain_genes = tcga_cnv_parser.get_top_genes(
     df=all_threshold_data,
     labels=["DUP", "AMP"],
     percent=30,
@@ -411,8 +418,9 @@ def main(unused_argv):
   logging.info('top gain genes:\n%s', top_gain_genes)
 
   top_homdel_path = datatable.fread(
-    file=os.path.join(FLAGS.data_directory, FLAGS.top_homdel_path)).to_pandas()
-  top_homdel_genes = TcgaCnvParser.get_top_genes(
+    file=os.path.join(FLAGS.output_directory,
+                      FLAGS.top_homdel_path)).to_pandas()
+  top_homdel_genes = tcga_cnv_parser.get_top_genes(
     df=all_threshold_data,
     labels=["HOMDEL"], percent=5,
     genedb_handle=org_hs_eg_db_handle)
@@ -441,20 +449,20 @@ def main(unused_argv):
                top_genes_base_path)
 
   logging.info('attempting cooccurance analysis 1')
-  TcgaCnvParser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1",
-                                     gene02="EIF3E", cnv_spec=["AMP", ])
+  tcga_cnv_parser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1",
+                                       gene02="EIF3E", cnv_spec=["AMP", ])
 
   logging.info('attempting coocurrance analysis 2')
-  TcgaCnvParser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1",
-                                     gene02="EIF3E", cnv_spec=["AMP", "DUP"])
+  tcga_cnv_parser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1",
+                                       gene02="EIF3E", cnv_spec=["AMP", "DUP"])
 
   logging.info('attempting coocurrance analysis 3')
-  TcgaCnvParser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1",
-                                     gene02="EIF3H", cnv_spec=["AMP", ])
+  tcga_cnv_parser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1",
+                                       gene02="EIF3H", cnv_spec=["AMP", ])
 
   logging.info('attempting coocurrance analysis 4')
-  TcgaCnvParser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1",
-                                     gene02="EIF3H", cnv_spec=["AMP", "DUP"])
+  tcga_cnv_parser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1",
+                                       gene02="EIF3H", cnv_spec=["AMP", "DUP"])
 
   logging.info('processing complete')
 
