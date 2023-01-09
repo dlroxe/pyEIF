@@ -49,7 +49,7 @@ class OrgHsEgDbLookup(genedb_lookup.GeneDBLookup):
         gene_id = f'{short_gene_symbol} ({gene_symbol})'
 
       if len(rows) > 1:
-        return gene_id + ' (' + ', '.join([row[0] for row in rows]) + ' )'
+        return gene_id + ' [' + ', '.join([row[0] for row in rows]) + ']'
       return gene_id
 
     msg = 'found %s Entrez ID rows for %s'
