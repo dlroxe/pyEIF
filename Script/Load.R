@@ -19,9 +19,6 @@ library(tibble)
 library(tidyverse)
 library(xlsx)
 
-# "AnnotationDbi", "corrr", "cowplot", "data.table", "DescTools", "dplyr", "ggnewscale", "enrichplot", "forcats", "ggplot2", "likert", "magrittr", "org.Hs.eg.db", "ReactomePA", "reshape2", "stats", "stringr", "tibble", "tidyverse", "xlsx"
-
-
 data_file_directory <- "~/Documents/Bioinformatics_analysis/eIF4G-analysis/eIF4G_data"
 output_directory <- "~/Documents/Bioinformatics_analysis/eIF4G-analysis/eIF4G_output"
 
