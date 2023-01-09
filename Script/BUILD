@@ -10,6 +10,7 @@ py_library(
     deps = [
         ":hs_data_lookup",
         ":org_hs_eg_db_lookup",
+        ":tcga_cnv_parser",
     ],
 )
 
@@ -45,4 +46,9 @@ py_library(
     name = "org_hs_eg_db_lookup",
     srcs = ["input_data_adapters/org_hs_eg_db_lookup.py"],
     deps = [":genedb_lookup"],
+)
+
+py_library(
+    name = "tcga_cnv_parser",
+    srcs = ["input_data_adapters/tcga_cnv_parser.py"],
 )

@@ -7,7 +7,7 @@ sys.path += ['input_data_adapters']
 from absl.testing import absltest
 
 import hs_data_lookup
-import init_data
+import tcga_cnv_parser
 import pandas
 
 
@@ -28,8 +28,8 @@ class UnitTests(absltest.TestCase):
         ['DIPLOID', 'DIPLOID', 'DIPLOID', 'DIPLOID', 'DIPLOID'],
     }).set_index('Sample')
 
-    tcga_cnv_parser = init_data.TcgaCnvParser('', '', '', '', '')
-    all_threshold_data = tcga_cnv_parser.get_tcga_cnv(
+    parser = tcga_cnv_parser.TcgaCnvParser('', '', '', '', '')
+    all_threshold_data = parser.get_tcga_cnv(
       values_data_frame=raw_threshold_data)
     self.assertTrue(all_threshold_data.equals(expected_threshold_data),
                     msg=all_threshold_data.compare(expected_threshold_data))
@@ -63,8 +63,8 @@ class UnitTests(absltest.TestCase):
 
     }).set_index('Sample').transpose()
 
-    tcga_cnv_parser = init_data.TcgaCnvParser('', '', '', '', '')
-    joined_data = tcga_cnv_parser.merge_cnv_phenotypes(
+    parser = tcga_cnv_parser.TcgaCnvParser('', '', '', '', '')
+    joined_data = parser.merge_cnv_phenotypes(
       cnv_data=threshold_data, phenotype_data=phenotype_data)
 
     self.assertTrue(joined_data.equals(expected_joined_data),
@@ -79,7 +79,7 @@ class UnitTests(absltest.TestCase):
                           'DIPLOID'],
     }).set_index('Sample').transpose()
     genedb_handle = hs_data_lookup.EntrezLookup(hs_file=None)
-    top_genes = init_data.TcgaCnvParser.get_top_genes  # for convenience
+    top_genes = tcga_cnv_parser.TcgaCnvParser.get_top_genes  # for convenience
     top_genes01 = top_genes(threshold_data, labels=['AMP'], percent=30,
                             genedb_handle=genedb_handle)
     top_genes02 = top_genes(threshold_data, labels=['AMP'], percent=40,
