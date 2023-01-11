@@ -90,10 +90,17 @@ class TcgaCnvParser:
 
     # Unfortunately, pandas documentation suggests that chaining is prone
     # to failure:
+    #
     # http://pandas.pydata.org/pandas-docs/dev/user_guide/indexing.html#returning-a-view-versus-a-copy
     #
     # So, 'df' is referenced repeatedly.  OTOH, this approach is probably
     # more memory efficient.
+    #
+    # Values are (well) within the range [-5.0, 5.0], so it is tempting to
+    # save memory by converting from 'float64' to 'float32'.  However, they are
+    # stored with 3 decimal places, and use of 'float32' results in loss of
+    # precision (e.g. '0.010' -> '0.010002').  So, the default 'float64' width
+    # is retained.
     df = datatable.fread(file=input_file).to_pandas()
     df.sort_values(by=['Sample'], inplace=True)
     df.set_index('Sample', inplace=True)
@@ -126,7 +133,12 @@ class TcgaCnvParser:
       values_data_frame = self.get_tcga_cnv_value(
         raw_data_file=self._cnv_data_by_gene_thresholds)
     values_data_frame.replace(self.cnv_code_mappings, inplace=True)
-    return values_data_frame
+
+    # Because there are only a handful of allowed cell values, setting the
+    # 'category' data type yields a substantial memory savings, from 678,819
+    # bytes per column for the full data set, to 11,324 bytes per column (that's
+    # a factor of 60).
+    return values_data_frame.astype('category')
 
   # TODO(dlroxe): Probably it's worth documenting the join() semantics more
   #               carefully, particularly regarding the indices, in
@@ -165,9 +177,12 @@ class TcgaCnvParser:
     cnv = self.get_tcga_cnv() if cnv_data is None else cnv_data
 
     if phenotype_data is None:
-      phenotype_data = datatable.fread(
-        file=os.path.join(self._data_directory, self._cnv_data_phenotypes)
-      ).to_pandas()[['sample', 'sample_type', '_primary_disease']]
+      phenotype_data = (
+        datatable.fread(
+          file=os.path.join(self._data_directory, self._cnv_data_phenotypes))
+        .to_pandas()[['sample', 'sample_type', '_primary_disease']]
+        .astype('string')  # accurate, and mem-efficient vs. default 'object'
+      )
       phenotype_data.rename(
         columns={
           'sample': 'Sample',
@@ -198,15 +213,20 @@ class TcgaCnvParser:
     df = df.melt(id_vars=['rowname'], var_name='Gene', value_name='Value',
                  ignore_index=True)
     df.set_index('rowname', inplace=True)
-    df = pandas.DataFrame(df.loc[lambda x: x['Value'].isin(labels)])
+    df = df.loc[lambda x: x['Value'].isin(labels)]
     df = df.groupby(by='Gene').count()
     df = df.apply(lambda x: 100 * x / sample_count)
-    df = pandas.DataFrame(df.loc[lambda x: x['Value'] > percent])
+    df = df.loc[lambda x: x['Value'] > percent]
     df.reset_index(inplace=True)
     df = df.assign(
       entrez=lambda x: x['Gene'].apply(
         genedb_handle.translate_gene_symbol_to_entrez_id))
-    return df
+    # Convert the new column to a nullable int64 type (that is, an int64
+    # that permits <NA> values), and return.  The capital-I 'Int64' is the
+    # documented Pandas type alias for this purpose.  Values in this column
+    # will either be 64-bit integers (and Entrez does seem to intend use of
+    # 64-bit ints) or 'pandas.NA', which appears in printed form as '<NA>'.
+    return df.astype({'entrez': 'Int64'})
 
   # TODO(dlroxe): Fix up the function docstring below.
   def cooccurance_analysis(self, df: pandas.DataFrame, gene01: str, gene02: str,

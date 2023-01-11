@@ -26,7 +26,7 @@ class UnitTests(absltest.TestCase):
       'TCGA-S9-A7J2-01': ['HOMDEL', 'DEL', 'DEL', 'DEL', 'DEL'],
       'TCGA-06-0150-01':
         ['DIPLOID', 'DIPLOID', 'DIPLOID', 'DIPLOID', 'DIPLOID'],
-    }).set_index('Sample')
+    }).set_index('Sample').astype('category')
 
     parser = tcga_cnv_parser.TcgaCnvParser('', '', '', '', '')
     all_threshold_data = parser.get_tcga_cnv(

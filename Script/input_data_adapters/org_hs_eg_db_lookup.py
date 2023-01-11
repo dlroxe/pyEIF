@@ -9,6 +9,7 @@ This module assumes that the source code for that package has been downloaded
 and installed, and provides lookup functions against the contents of the
 SQLite database it contains.
 """
+import pandas
 from absl import logging
 from typing import List, Optional
 
@@ -32,7 +33,7 @@ class OrgHsEgDbLookup():
     else:
       self._init_memdb(org_hs_eg_db_file)
 
-  def translate_gene_symbol_to_entrez_id(self, gene_symbol: str) -> str:
+  def translate_gene_symbol_to_entrez_id(self, gene_symbol: str) -> int:
     """Returns the Entrez ID for 'gene_symbol', or None if lookup fails."""
     short_gene_symbol = gene_symbol.split('|')[0]
     rows = self._execute(textwrap.dedent(f'''\
@@ -61,7 +62,7 @@ class OrgHsEgDbLookup():
     if len(rows) == 0:
       logging.warning(msg, len(rows), descriptor(rows))
 
-    return rows[0][0] if rows else None
+    return rows[0][0] if rows else pandas.NA
 
   def _init_memdb(self, org_hs_eg_db_file: str) -> None:
     logging.info('accessing org_hs_eg_db: %s', org_hs_eg_db_file)
