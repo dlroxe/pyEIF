@@ -57,10 +57,6 @@ flags.DEFINE_string('cnv_data_phenotypes',
                     'the path, relative to data_directory, where phenotype '
                     'data can be found for tissue samples named in '
                     'cnv_data_by_gene_values and cnv_data_by_gene_thresholds.')
-flags.DEFINE_string('hs_data', 'Hs.data',
-                    'unzipped contents of '
-                    'ftp.ncbi.nih.gov/'
-                    'repository/UniGene/Homo_sapiens/Hs.data.gz')
 flags.DEFINE_string('org_hs_eg_sqlite',
                     'org.Hs.eg.db/inst/extdata/org.Hs.eg.sqlite',
                     'the path, relative to data_directory, where the database '
@@ -69,14 +65,6 @@ flags.DEFINE_string('org_hs_eg_sqlite',
                     'link at '
                     'https://bioconductor.org/packages/release/data/annotation/html/org.Hs.eg.db.html '
                     'and deployed to the data_directory using "tar -xzvf".')
-flags.DEFINE_string('reactome_sqlite',
-                    'reactome.db/inst/extdata/reactome.sqlite',
-                    'the path, relative to data_directory, where the database '
-                    'underlying the "reactome.db" package may be found.  '
-                    'This package may be obtained via the "Source Package" '
-                    'link at '
-                    'https://bioconductor.org/packages/release/data/annotation/html/reactome.db.html '
-                    'and deployed to the data_directory using "tar -zxvf".')
 
 # Note, these flags designate files in *output_directory*.
 flags.DEFINE_string('top_amp_path',

@@ -10,14 +10,13 @@ and installed, and provides lookup functions against the contents of the
 SQLite database it contains.
 """
 from absl import logging
-from typing import List
+from typing import List, Optional
 
-import genedb_lookup
 import sqlite3
 import textwrap
 
 
-class OrgHsEgDbLookup(genedb_lookup.GeneDBLookup):
+class OrgHsEgDbLookup():
   """
   This is a stateful container that opens the org.Hs.eg.db database and
   organizes its contents (e.g. by joining 'alias' and 'genes' tables in a new
@@ -26,9 +25,12 @@ class OrgHsEgDbLookup(genedb_lookup.GeneDBLookup):
   statements from the rest of the package.
   """
 
-  def __init__(self, org_hs_eg_db_file: str):
+  def __init__(self, org_hs_eg_db_file: Optional[str] = None):
     self._memdb = sqlite3.connect(':memory:')
-    self._init_memdb(org_hs_eg_db_file)
+    if org_hs_eg_db_file is None:
+      self._init_empty_memdb()
+    else:
+      self._init_memdb(org_hs_eg_db_file)
 
   def translate_gene_symbol_to_entrez_id(self, gene_symbol: str) -> str:
     """Returns the Entrez ID for 'gene_symbol', or None if lookup fails."""
@@ -81,6 +83,18 @@ class OrgHsEgDbLookup(genedb_lookup.GeneDBLookup):
         ;
         '''), verbose=True)
       self._memdb.commit()
+
+  def _init_empty_memdb(self) -> None:
+    logging.info('making empty in-memory db.')
+
+    logging.info('creating name-entrez lookup table')
+    self._execute(cmd=textwrap.dedent('''
+      create table name2entrez (
+        symbol TEXT,
+        gene_id TEXT
+      );
+      '''), verbose=True)
+    self._memdb.commit()
 
   def _execute(self, cmd: str, verbose: bool) -> List[sqlite3.Row]:
     if verbose:

@@ -24,7 +24,7 @@ import sys
 
 sys.path += ['input_data_adapters']
 
-import genedb_lookup
+import org_hs_eg_db_lookup
 
 
 class TcgaCnvParser:
@@ -185,7 +185,7 @@ class TcgaCnvParser:
       df: pandas.DataFrame,
       labels: List[str],
       percent: int,
-      genedb_handle: genedb_lookup.GeneDBLookup,
+      genedb_handle: org_hs_eg_db_lookup.OrgHsEgDbLookup,
   ) -> pandas.DataFrame:
     sample_count = len(df.index)  # save number of samples before alterations
 
@@ -195,7 +195,6 @@ class TcgaCnvParser:
     df.reset_index(inplace=True)
 
     # melt() makes another copy, which is then modified in-place
-    df = pandas.DataFrame(df, copy=True)  # extra copy seems to reduce segfaults
     df = df.melt(id_vars=['rowname'], var_name='Gene', value_name='Value',
                  ignore_index=True)
     df.set_index('rowname', inplace=True)

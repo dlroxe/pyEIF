@@ -6,7 +6,7 @@ sys.path += ['input_data_adapters']
 
 from absl.testing import absltest
 
-import hs_data_lookup
+import org_hs_eg_db_lookup
 import tcga_cnv_parser
 import pandas
 
@@ -78,7 +78,7 @@ class UnitTests(absltest.TestCase):
       'TCGA-06-0150-01': ['DIPLOID', 'DIPLOID', 'DIPLOID', 'DIPLOID',
                           'DIPLOID'],
     }).set_index('Sample').transpose()
-    genedb_handle = hs_data_lookup.EntrezLookup(hs_file=None)
+    genedb_handle = org_hs_eg_db_lookup.OrgHsEgDbLookup(org_hs_eg_db_file=None)
     top_genes = tcga_cnv_parser.TcgaCnvParser.get_top_genes  # for convenience
     top_genes01 = top_genes(threshold_data, labels=['AMP'], percent=30,
                             genedb_handle=genedb_handle)
