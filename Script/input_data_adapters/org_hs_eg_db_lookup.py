@@ -71,19 +71,20 @@ class OrgHsEgDbLookup():
         f'file:{org_hs_eg_db_file}?mode=ro', uri=True) as diskdb:
       logging.info('copying org_hs_eg_db to in-memory db.')
       self._memdb.executescript("".join(line for line in diskdb.iterdump()))
-      self._memdb.commit()
 
-      logging.info('creating name-entrez lookup table')
-      self._execute(cmd=textwrap.dedent('''
-        create table name2entrez as
-          select
-            symbol,
-            gene_id
-          from
-            gene_info cross join genes on gene_info._id = genes._id
-        ;
-        '''), verbose=True)
-      self._memdb.commit()
+    self._memdb.commit()
+
+    logging.info('creating name-entrez lookup table')
+    self._execute(cmd=textwrap.dedent('''
+      create table name2entrez as
+        select
+          symbol,
+          gene_id
+        from
+          gene_info cross join genes on gene_info._id = genes._id
+      ;
+      '''), verbose=True)
+    self._memdb.commit()
 
   def _init_empty_memdb(self) -> None:
     logging.info('making empty in-memory db.')
