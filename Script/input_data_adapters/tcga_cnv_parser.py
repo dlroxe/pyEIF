@@ -226,6 +226,10 @@ class TcgaCnvParser:
     # documented Pandas type alias for this purpose.  Values in this column
     # will either be 64-bit integers (and Entrez does seem to intend use of
     # 64-bit ints) or 'pandas.NA', which appears in printed form as '<NA>'.
+    #
+    # See also "Nullable integer data type" in the Pandas docs:
+    #
+    # https://pandas.pydata.org/docs/user_guide/integer_na.html
     return df.astype({'entrez': 'Int64'})
 
   # TODO(dlroxe): Fix up the function docstring below.
