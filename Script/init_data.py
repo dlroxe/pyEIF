@@ -142,15 +142,21 @@ def main(unused_argv):
 
   top_amp_path = datatable.fread(
     file=os.path.join(FLAGS.output_directory, FLAGS.top_amp_path)).to_pandas()
+
+  sample_count = len(all_threshold_data.index)
+  melted_threshold_data = parser.melt_threshold_data(all_threshold_data)
+
   top_amp_genes = parser.get_top_genes(
-    df=all_threshold_data, labels=["AMP"], percent=5,
+    sample_count=sample_count,
+    df=melted_threshold_data, labels=["AMP"], percent=5,
     genedb_handle=org_hs_eg_db_handle)
   logging.info('top amp genes:\n%s', top_amp_genes)
 
   top_gain_path = datatable.fread(
     file=os.path.join(FLAGS.output_directory, FLAGS.top_gain_path)).to_pandas()
   top_gain_genes = parser.get_top_genes(
-    df=all_threshold_data,
+    sample_count=sample_count,
+    df=melted_threshold_data,
     labels=["DUP", "AMP"],
     percent=30,
     genedb_handle=org_hs_eg_db_handle)
@@ -160,7 +166,8 @@ def main(unused_argv):
     file=os.path.join(FLAGS.output_directory,
                       FLAGS.top_homdel_path)).to_pandas()
   top_homdel_genes = parser.get_top_genes(
-    df=all_threshold_data,
+    sample_count=sample_count,
+    df=melted_threshold_data,
     labels=["HOMDEL"], percent=5,
     genedb_handle=org_hs_eg_db_handle)
   logging.info('top homdel genes:\n%s', top_homdel_genes)

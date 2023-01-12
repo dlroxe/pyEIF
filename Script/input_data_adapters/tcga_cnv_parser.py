@@ -194,25 +194,30 @@ class TcgaCnvParser:
 
     return cnv.join(phenotype_data, how='inner')
 
+  # TODO(dlroxe): Reconsider how this could be organized.  It lives here for
+  #               now so that both init_data.py and tcga_cnv_parser_tests.py
+  #               can use it conveniently.
+  @classmethod
+  def melt_threshold_data(cls, df: pandas.DataFrame) -> pandas.DataFrame:
+    # make a copy; then modify the copy in-place
+    df = pandas.DataFrame(df, copy=True)
+    df.index.name = 'rowname'
+    df.reset_index(inplace=True)
+    df = df.melt(
+      id_vars=['rowname'], var_name='Gene', value_name='Value',
+      ignore_index=True)
+    df.set_index('rowname', inplace=True)
+    return df
+
   @classmethod
   def get_top_genes(
       cls,
+      sample_count: int,
       df: pandas.DataFrame,
       labels: List[str],
       percent: int,
       genedb_handle: org_hs_eg_db_lookup.OrgHsEgDbLookup,
   ) -> pandas.DataFrame:
-    sample_count = len(df.index)  # save number of samples before alterations
-
-    # make a copy; then modify the copy in-place
-    df = pandas.DataFrame(df, copy=True)
-    df.index.name = 'rowname'
-    df.reset_index(inplace=True)
-
-    # melt() makes another copy, which is then modified in-place
-    df = df.melt(id_vars=['rowname'], var_name='Gene', value_name='Value',
-                 ignore_index=True)
-    df.set_index('rowname', inplace=True)
     df = df.loc[lambda x: x['Value'].isin(labels)]
     df = df.groupby(by='Gene').count()
     df = df.apply(lambda x: 100 * x / sample_count)
