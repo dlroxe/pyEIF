@@ -218,18 +218,25 @@ class TcgaCnvParser:
     df = df.apply(lambda x: 100 * x / sample_count)
     df = df.loc[lambda x: x['Value'] > percent]
     df.reset_index(inplace=True)
-    df = df.assign(
-      entrez=lambda x: x['Gene'].apply(
-        genedb_handle.translate_gene_symbol_to_entrez_id))
-    # Convert the new column to a nullable int64 type (that is, an int64
-    # that permits <NA> values), and return.  The capital-I 'Int64' is the
-    # documented Pandas type alias for this purpose.  Values in this column
-    # will either be 64-bit integers (and Entrez does seem to intend use of
-    # 64-bit ints) or 'pandas.NA', which appears in printed form as '<NA>'.
+
+    # Synthesize a new column named 'entrez', which contains the Entrez ID
+    # corresponding to 'Gene', or pandas.NA if no Entrez ID can be determined.
+    #
+    # The new column is specified with a nullable int64 type (that is, an int64
+    # that permits <NA> values).  The capital-I 'Int64' is the documented Pandas
+    # type alias for this purpose.  Values in this column will either be 64-bit
+    # integers or 'pandas.NA', which appears in printed form as '<NA>'.
     #
     # See also "Nullable integer data type" in the Pandas docs:
     #
     # https://pandas.pydata.org/docs/user_guide/integer_na.html
+    #
+    # See also this article regarding Entrez IDs and 64-bit ints:
+    #
+    # https://ncbiinsights.ncbi.nlm.nih.gov/2021/09/02/64-bit-gis/
+    df = df.assign(
+      entrez=lambda x: x['Gene'].apply(
+        genedb_handle.translate_gene_symbol_to_entrez_id))
     return df.astype({'entrez': 'Int64'})
 
   # TODO(dlroxe): Fix up the function docstring below.
