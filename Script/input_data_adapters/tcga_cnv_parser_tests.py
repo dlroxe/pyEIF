@@ -1,9 +1,5 @@
 """Tests for init_data.py."""
 
-import sys
-
-sys.path += ['input_data_adapters']
-
 from absl.testing import absltest
 
 import org_hs_eg_db_lookup

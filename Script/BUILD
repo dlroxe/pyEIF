@@ -13,10 +13,9 @@ py_library(
     ],
 )
 
-py_test(
-    name = "init_data_tests",
-    srcs = ["init_data_tests.py"],
-    deps = [":init_data"],
+py_library(
+    name = "org_hs_eg_db_lookup",
+    srcs = ["input_data_adapters/org_hs_eg_db_lookup.py"],
 )
 
 py_test(
@@ -28,11 +27,12 @@ py_test(
 )
 
 py_library(
-    name = "org_hs_eg_db_lookup",
-    srcs = ["input_data_adapters/org_hs_eg_db_lookup.py"],
-)
-
-py_library(
     name = "tcga_cnv_parser",
     srcs = ["input_data_adapters/tcga_cnv_parser.py"],
+)
+
+py_test(
+    name = "tcga_cnv_parser_tests",
+    srcs = ["input_data_adapters/tcga_cnv_parser_tests.py"],
+    deps = [":init_data"],
 )
