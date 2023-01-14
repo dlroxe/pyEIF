@@ -30,7 +30,7 @@ class UnitTests(absltest.TestCase):
     parser = tcga_cnv_parser.TcgaCnvParser(None, None, None, None, None)
     parser._threshold_raw_data = raw_threshold_data
     parser._threshold_data = parser._init_threshold_data()
-    all_threshold_data = parser.get_tcga_cnv()
+    all_threshold_data = parser.get_tcga_cnv_threshold_categories()
     self.assertTrue(expected_threshold_data.equals(all_threshold_data),
                     msg=expected_threshold_data.compare(all_threshold_data))
 
@@ -75,7 +75,7 @@ class UnitTests(absltest.TestCase):
     parser = tcga_cnv_parser.TcgaCnvParser(None, None, None, None, None)
     parser._threshold_data = threshold_data
     parser._phenotype_data = phenotype_data
-    joined_data = parser.merge_cnv_phenotypes()
+    joined_data = parser.merge_cnv_thresholds_and_phenotypes()
 
     self.assertTrue(joined_data.equals(expected_joined_data),
                     msg='\n' + joined_data.compare(expected_joined_data))

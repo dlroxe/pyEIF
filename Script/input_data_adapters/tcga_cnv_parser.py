@@ -59,6 +59,8 @@ class TcgaCnvParser:
     self._cnv_data_phenotypes: Optional[str] = cnv_data_phenotypes
 
     # computed values
+    self._raw_values_data: Optional[
+      pandas.DataFrame] = self._init_raw_values_data()
     self._threshold_raw_data: Optional[
       pandas.DataFrame] = self._init_threshold_raw_data()  # -2, -1, etc.
     self._threshold_data: Optional[
@@ -66,14 +68,47 @@ class TcgaCnvParser:
     self._phenotype_data: Optional[
       pandas.DataFrame] = self._init_phenotype_data()
 
+  def _init_raw_values_data(self) -> Optional[pandas.DataFrame]:
+    if self._cnv_data_by_gene_values is None:
+      logging.warning('no raw CNV data file specified')
+      return None
+
+    raw_data_file = self._abspath(
+      os.path.join(self._data_directory, self._cnv_data_by_gene_values))
+
+    if not os.path.exists(raw_data_file):
+      logging.warning('raw CNV data file does not exist: %s', raw_data_file)
+      return None
+
+    logging.info('reading from %s', raw_data_file)
+
+    # Unfortunately, pandas documentation suggests that chaining is prone
+    # to failure:
+    #
+    # http://pandas.pydata.org/pandas-docs/dev/user_guide/indexing.html#returning-a-view-versus-a-copy
+    #
+    # So, 'df' is referenced repeatedly.  OTOH, this approach is probably
+    # more memory efficient.
+    #
+    # Values are (well) within the range [-5.0, 5.0], so it is tempting to
+    # save memory by converting from 'float64' to 'float32'.  However, they are
+    # stored with 3 decimal places, and use of 'float32' results in loss of
+    # precision (e.g. '0.010' -> '0.010002').  So, the default 'float64' width
+    # is retained.
+    df = datatable.fread(file=raw_data_file).to_pandas()
+    df.sort_values(by=['Sample'], inplace=True)
+    df.set_index('Sample', inplace=True)
+    return df.transpose()
+
   def _init_threshold_raw_data(self) -> Optional[pandas.DataFrame]:
     if self._cnv_data_by_gene_thresholds is None:
       logging.warning('no CNV threshold data file specified')
       return None
 
-    return self.get_tcga_cnv_value(
-      self._abspath(
-        os.path.join(self._data_directory, self._cnv_data_by_gene_thresholds)))
+    raw_data_file = self._abspath(
+      os.path.join(self._data_directory, self._cnv_data_by_gene_thresholds))
+
+    return self._read_tcga_cnv_values(raw_data_file)
 
   def _init_threshold_data(self) -> Optional[pandas.DataFrame]:
     # Note the .replace() call, which just applies the dict, and is very quick.
@@ -97,14 +132,10 @@ class TcgaCnvParser:
 
     phenotype_file = self._abspath(os.path.join(
       self._data_directory, self._cnv_data_phenotypes))
-    if not os.path.exists(phenotype_file):
-      logging.error('could not find phenotype data file: %s', phenotype_file)
-      return None
 
-    logging.info('initializing phenotype data from: %s', phenotype_file)
     phenotype_data = (
-      datatable.fread(file=phenotype_file)
-      .to_pandas()[['sample', 'sample_type', '_primary_disease']]
+      self._read_csv(
+        filename=phenotype_file)[['sample', 'sample_type', '_primary_disease']]
       .astype('string')  # accurate, and mem-efficient vs. default 'object'
     )
     phenotype_data.rename(
@@ -115,6 +146,7 @@ class TcgaCnvParser:
       }, inplace=True)
     phenotype_data.sort_values(by=['Sample'], inplace=True)
     phenotype_data.set_index('Sample', inplace=True)
+    logging.info('initialized phenotype data as:\n%s', phenotype_data)
     return phenotype_data
 
   # TODO(dlroxe):  This function is cropping up in a few places; try to find
@@ -124,40 +156,15 @@ class TcgaCnvParser:
     # What an absurd incantation to resolve "~"; but OK. Thanks, StackOverflow.
     return os.path.abspath(os.path.expanduser(os.path.expandvars(path)))
 
-  def get_tcga_cnv_value(self, raw_data_file: str = None) -> pandas.DataFrame:
+  @classmethod
+  def _read_tcga_cnv_values(cls, raw_data_file: str) -> pandas.DataFrame:
     """
-    Reads raw_data_file and returns a related dataframe.
-
-    The input file contains raw data in the following form:
-
-              TCGA-A5-A0GI-01  TCGA-S9-A7J2-01  TCGA-06-0150-01  ...   TCGA-DD-A115-01
-    Sample                                                       ...
-    ACAP3               0.0             -1.0              0.0    ...             0.0
-    ACTRT2              0.0             -1.0              0.0    ...             0.0
-    AGRN                0.0             -1.0              0.0    ...             0.0
-    ANKRD65             0.0             -1.0              0.0    ...             0.0
-    ATAD3A              0.0             -1.0              0.0    ...             0.0
-
-    The rows are genes, and the columns are samples.  This function transposes
-    the data:
-
-    Sample            ACAP3  ACTRT2   AGRN   ANKRD65  ATAD3A
-    TCGA-A5-A0GI-01    0.0     0.0    0.0       0.0     0.0
-    TCGA-S9-A7J2-01   -1.0    -1.0   -1.0      -1.0    -1.0
-    TCGA-06-0150-01    0.0     0.0    0.0       0.0     0.0
-    ...                ...     ...    ...       ...     ...
-    TCGA-DD-A115-01    0.0     0.0    0.0       0.0     0.0
+    Reads raw_data_file and returns a transposed and indexed dataframe.
 
     :param raw_data_file: the name of a file (relative to the configured data
       directory) containing raw data
     :return: a data frame with samples as rows.
     """
-    if raw_data_file is None:
-      logging.warning('no raw CNV data file specified')
-      return None
-    input_file = self._abspath(
-      os.path.join(self._data_directory, raw_data_file))
-    logging.info('reading from %s', input_file)
 
     # Unfortunately, pandas documentation suggests that chaining is prone
     # to failure:
@@ -171,15 +178,57 @@ class TcgaCnvParser:
     # save memory by converting from 'float64' to 'float32'.  However, they are
     # stored with 3 decimal places, and use of 'float32' results in loss of
     # precision (e.g. '0.010' -> '0.010002').  So, the default 'float64' width
-    # is retained.
-    df = datatable.fread(file=input_file).to_pandas()
+    # is retained.  (One supposes that all the values could be multiplied by
+    # 1,000 and retained in 16-bit integers, but conversions seem like more
+    # trouble than they're worth until and unless memory usage becomes a far
+    # more critical concern.)
+    df = cls._read_csv(raw_data_file)
     df.sort_values(by=['Sample'], inplace=True)
     df.set_index('Sample', inplace=True)
     return df.transpose()
 
-  def get_tcga_cnv(self) -> pandas.DataFrame:
+  @staticmethod
+  def _read_csv(filename: str) -> Optional[pandas.DataFrame]:
+    if os.path.exists(filename):
+      logging.info('reading data from: %s', filename)
+      return datatable.fread(file=filename).to_pandas()
+
+    logging.error('file does not exist: %s', filename)
+    return None
+
+  def get_tcga_cnv_value(self) -> pandas.DataFrame:
     """
-    Returns get_tcga_cnv_value(), with numeric cell values replaced by labels.
+    Returns TCGA CNV data organized with genes as columns and samples as rows.
+
+    For example, TCGA provides threshold data in this format:
+
+              TCGA-A5-A0GI-01  TCGA-S9-A7J2-01  TCGA-06-0150-01  ...   TCGA-DD-A115-01
+    Sample                                                       ...
+    ACAP3               0.0             -1.0              0.0    ...             0.0
+    ACTRT2              0.0             -1.0              0.0    ...             0.0
+    AGRN                0.0             -1.0              0.0    ...             0.0
+    ANKRD65             0.0             -1.0              0.0    ...             0.0
+    ATAD3A              0.0             -1.0              0.0    ...             0.0
+
+    The rows are genes, and the columns are samples.  This function returns a
+    transposed copy of the data:
+
+    Sample            ACAP3  ACTRT2   AGRN   ANKRD65  ATAD3A
+    TCGA-A5-A0GI-01    0.0     0.0    0.0       0.0     0.0
+    TCGA-S9-A7J2-01   -1.0    -1.0   -1.0      -1.0    -1.0
+    TCGA-06-0150-01    0.0     0.0    0.0       0.0     0.0
+    ...                ...     ...    ...       ...     ...
+    TCGA-DD-A115-01    0.0     0.0    0.0       0.0     0.0
+
+    :return: a data frame with samples as rows.  The returned data is always
+             a freshly-copied dataframe, which can be manipulated without fear
+             of altering the underlying data.
+    """
+    return pandas.DataFrame(self._raw_values_data, copy=True)
+
+  def get_tcga_cnv_threshold_categories(self) -> pandas.DataFrame:
+    """
+    Returns CNV threshold data , with numeric cell values replaced by labels.
 
     Sample output for a selection of EIF genes:
 
@@ -191,19 +240,21 @@ class TcgaCnvParser:
     TCGA-DD-A115-01  DIPLOID      DEL      DEL
 
     :return: a data frame with samples as rows, selected genes as columns, and
-     string labels as cell values.
+     string labels as cell values.  Every call to this function returns a fresh
+     copy of the data, which may be manipulated without concern for the
+     integrity of the underlying data.
     """
-    # TODO(dlroxe): Consider returning an explicit copy.
-    return self._threshold_data
+    return pandas.DataFrame(self._threshold_data, copy=True)
 
   # TODO(dlroxe): Probably it's worth documenting the join() semantics more
   #               carefully, particularly regarding the indices, in
   #               merge_cnv_phenotypes().
-  def merge_cnv_phenotypes(self) -> pandas.DataFrame:
+  def merge_cnv_thresholds_and_phenotypes(self) -> pandas.DataFrame:
     """
-    Merges TCGA 'sample type' and 'primary disease' phenotypes with CNV data.
+    Merges TCGA 'sample type' and 'primary disease' phenotypes with CNV
+    threshold data.
 
-    For example, CNV data might include this row:
+    For example, CNV threshold data might include this row:
 
     Sample             gene1    gene2    gene3  ...   gene4    gene5    gene6
     TCGA-A5-A0GI-01  DIPLOID  DIPLOID  DIPLOID  ... DIPLOID  DIPLOID  DIPLOID
@@ -219,25 +270,17 @@ class TcgaCnvParser:
     Sample             gene1    gene2    gene3  ...   gene6    sample.type                        primary_disease
     TCGA-A5-A0GI-01  DIPLOID  DIPLOID  DIPLOID  ... DIPLOID  Primary Tumor  uterine corpus endometrioid carcinoma
 
-
-    :param cnv_data: a dataframe obtained from
-      get_tcga_cnv() or get_tcga_cnv_value()
-    :param phenotype_data: a dataframe based derived from data referenced by
-      FLAGS.cnv_data_phenotypes
     :return: a merged dataframe that combines CNV value/threshold data with CNV
      phenotype data.
     """
-    cnv = self.get_tcga_cnv()
-
-    logging.info(
-      'merging cnv and phenotype:\n%s\n%s', cnv, self._phenotype_data)
+    cnv = self.get_tcga_cnv_threshold_categories()  # this is a fresh copy
     return cnv.join(self._phenotype_data, how='inner')
 
   # TODO(dlroxe): Reconsider how this could be organized.  It lives here for
   #               now so that both init_data.py and tcga_cnv_parser_tests.py
   #               can use it conveniently.
-  @classmethod
-  def melt_threshold_data(cls, df: pandas.DataFrame) -> pandas.DataFrame:
+  @staticmethod
+  def melt_threshold_data(df: pandas.DataFrame) -> pandas.DataFrame:
     # make a copy; then modify the copy in-place
     df = pandas.DataFrame(df, copy=True)
     df.index.name = 'rowname'
@@ -248,9 +291,10 @@ class TcgaCnvParser:
     df.set_index('rowname', inplace=True)
     return df
 
-  @classmethod
+  # TODO(dlroxe): Document this method, and reconsider how it could be
+  #               organized.
+  @staticmethod
   def get_top_genes(
-      cls,
       sample_count: int,
       df: pandas.DataFrame,
       labels: List[str],

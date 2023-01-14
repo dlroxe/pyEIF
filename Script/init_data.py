@@ -135,15 +135,14 @@ def main(unused_argv):
     cnv_data_phenotypes=FLAGS.cnv_data_phenotypes,
   )
 
-  all_data = parser.get_tcga_cnv_value(
-    raw_data_file=FLAGS.cnv_data_by_gene_values)
+  all_data = parser.get_tcga_cnv_value()
   logging.info('all data\n%s', all_data)
 
-  all_threshold_data = parser.get_tcga_cnv()
+  all_threshold_data = parser.get_tcga_cnv_threshold_categories()
   eif_threshold_data = all_threshold_data[eif_genes]
   logging.info('eif threshold data\n%s', eif_threshold_data)
 
-  merged_phenotyped_data = parser.merge_cnv_phenotypes()
+  merged_phenotyped_data = parser.merge_cnv_thresholds_and_phenotypes()
   logging.info('all threshold data, merged with phenotypes:\n%s',
                merged_phenotyped_data)
 
