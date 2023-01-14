@@ -78,15 +78,6 @@ class TcgaCnvParser:
       logging.warning('no raw CNV data file specified')
       return None
 
-    raw_data_file = self._abspath(
-      os.path.join(self._data_directory, self._cnv_data_by_gene_values))
-
-    if not os.path.exists(raw_data_file):
-      logging.warning('raw CNV data file does not exist: %s', raw_data_file)
-      return None
-
-    logging.info('reading from %s', raw_data_file)
-
     # Unfortunately, pandas documentation suggests that chaining is prone
     # to failure:
     #
@@ -100,7 +91,8 @@ class TcgaCnvParser:
     # stored with 3 decimal places, and use of 'float32' results in loss of
     # precision (e.g. '0.010' -> '0.010002').  So, the default 'float64' width
     # is retained.
-    df = datatable.fread(file=raw_data_file).to_pandas()
+    df = self._read_csv(self._abspath(
+      os.path.join(self._data_directory, self._cnv_data_by_gene_values)))
     df.sort_values(by=['Sample'], inplace=True)
     df.set_index('Sample', inplace=True)
     return df.transpose()
