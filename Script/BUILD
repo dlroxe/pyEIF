@@ -20,6 +20,7 @@ py_library(
 
 py_test(
     name = "org_hs_eg_db_lookup_tests",
+    size = "small",
     srcs = ["input_data_adapters/org_hs_eg_db_lookup_tests.py"],
     data = [
     ],
@@ -33,6 +34,7 @@ py_library(
 
 py_test(
     name = "tcga_cnv_parser_tests",
+    size = "small",
     srcs = ["input_data_adapters/tcga_cnv_parser_tests.py"],
     deps = [":init_data"],
 )

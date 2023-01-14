@@ -50,12 +50,45 @@ class TcgaCnvParser:
       cnv_data_by_gene_values: Optional[str],
       cnv_data_phenotypes: Optional[str],
   ):
-    self._data_directory = data_directory
-    self._output_directory = output_directory
-    self._cnv_data_by_gene_thresholds = cnv_data_by_gene_thresholds
-    self._cnv_data_by_gene_values = cnv_data_by_gene_values
-    self._cnv_data_phenotypes = cnv_data_phenotypes
-    self._phenotype_data = self._init_phenotype_data()
+    # member variables copied from constructor args
+    self._data_directory: Optional[str] = data_directory
+    self._output_directory: Optional[str] = output_directory
+    self._cnv_data_by_gene_thresholds: Optional[
+      str] = cnv_data_by_gene_thresholds
+    self._cnv_data_by_gene_values: Optional[str] = cnv_data_by_gene_values
+    self._cnv_data_phenotypes: Optional[str] = cnv_data_phenotypes
+
+    # computed values
+    self._threshold_raw_data: Optional[
+      pandas.DataFrame] = self._init_threshold_raw_data()  # -2, -1, etc.
+    self._threshold_data: Optional[
+      pandas.DataFrame] = self._init_threshold_data()  # HOMDEL, DEL, etc.
+    self._phenotype_data: Optional[
+      pandas.DataFrame] = self._init_phenotype_data()
+
+  def _init_threshold_raw_data(self) -> Optional[pandas.DataFrame]:
+    if self._cnv_data_by_gene_thresholds is None:
+      logging.warning('no CNV threshold data file specified')
+      return None
+
+    return self.get_tcga_cnv_value(
+      self._abspath(
+        os.path.join(self._data_directory, self._cnv_data_by_gene_thresholds)))
+
+  def _init_threshold_data(self) -> Optional[pandas.DataFrame]:
+    # Note the .replace() call, which just applies the dict, and is very quick.
+    #
+    # Because there are only a handful of allowed cell values, setting the
+    # 'category' data type yields a substantial memory savings, from 678,819
+    # bytes per column for the full data set, to 11,324 bytes per column (that's
+    # a factor of 60).
+    if self._threshold_raw_data is None:
+      logging.warning('no raw threshold data is available')
+      return None
+    values_data_frame = pandas.DataFrame(self._threshold_raw_data, copy=True)
+    logging.info('initializing thresholds from:\n%s', self._threshold_raw_data)
+    values_data_frame.replace(self.cnv_code_mappings, inplace=True)
+    return values_data_frame.astype('category')
 
   def _init_phenotype_data(self) -> Optional[pandas.DataFrame]:
     if not self._cnv_data_phenotypes:
@@ -97,30 +130,33 @@ class TcgaCnvParser:
 
     The input file contains raw data in the following form:
 
-                                 TCGA-A5-A0GI-01  TCGA-S9-A7J2-01  TCGA-06-0150-01  ...   TCGA-DD-A115-01
-    Sample                                                                          ...
-    ACAP3                                  0.0             -1.0              0.0    ...             0.0
-    ACTRT2                                 0.0             -1.0              0.0    ...             0.0
-    AGRN                                   0.0             -1.0              0.0    ...             0.0
-    ANKRD65                                0.0             -1.0              0.0    ...             0.0
-    ATAD3A                                 0.0             -1.0              0.0    ...             0.0
+              TCGA-A5-A0GI-01  TCGA-S9-A7J2-01  TCGA-06-0150-01  ...   TCGA-DD-A115-01
+    Sample                                                       ...
+    ACAP3               0.0             -1.0              0.0    ...             0.0
+    ACTRT2              0.0             -1.0              0.0    ...             0.0
+    AGRN                0.0             -1.0              0.0    ...             0.0
+    ANKRD65             0.0             -1.0              0.0    ...             0.0
+    ATAD3A              0.0             -1.0              0.0    ...             0.0
 
     The rows are genes, and the columns are samples.  This function transposes
-    the data and selects certain genes.  For example, for certain EIF genes, it
-    returns a dataframe of this form:
+    the data:
 
-    Sample          EIF4G1 EIF3E EIF3H
-    TCGA-A5-A0GI-01    0.0   0.0   0.0
-    TCGA-S9-A7J2-01    0.0   0.0   0.0
-    TCGA-06-0150-01    0.0   0.0   0.0
-    ...                ...   ...   ...
-    TCGA-DD-A115-01    0.0  -1.0  -1.0
+    Sample            ACAP3  ACTRT2   AGRN   ANKRD65  ATAD3A
+    TCGA-A5-A0GI-01    0.0     0.0    0.0       0.0     0.0
+    TCGA-S9-A7J2-01   -1.0    -1.0   -1.0      -1.0    -1.0
+    TCGA-06-0150-01    0.0     0.0    0.0       0.0     0.0
+    ...                ...     ...    ...       ...     ...
+    TCGA-DD-A115-01    0.0     0.0    0.0       0.0     0.0
 
     :param raw_data_file: the name of a file (relative to the configured data
       directory) containing raw data
     :return: a data frame with samples as rows.
     """
-    input_file = os.path.join(self._data_directory, raw_data_file)
+    if raw_data_file is None:
+      logging.warning('no raw CNV data file specified')
+      return None
+    input_file = self._abspath(
+      os.path.join(self._data_directory, raw_data_file))
     logging.info('reading from %s', input_file)
 
     # Unfortunately, pandas documentation suggests that chaining is prone
@@ -141,9 +177,7 @@ class TcgaCnvParser:
     df.set_index('Sample', inplace=True)
     return df.transpose()
 
-  def get_tcga_cnv(
-      self,
-      values_data_frame: Optional[pandas.DataFrame] = None) -> pandas.DataFrame:
+  def get_tcga_cnv(self) -> pandas.DataFrame:
     """
     Returns get_tcga_cnv_value(), with numeric cell values replaced by labels.
 
@@ -156,30 +190,16 @@ class TcgaCnvParser:
     ...                  ...      ...      ...
     TCGA-DD-A115-01  DIPLOID      DEL      DEL
 
-    :param values_data_frame: if None, then the function uses the value
-           returned by
-           get_tcga_cnv_value(
-           'Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes')
     :return: a data frame with samples as rows, selected genes as columns, and
      string labels as cell values.
     """
-    # Note the .replace() call, which just applies the dict, and is very quick.
-    if values_data_frame is None:
-      values_data_frame = self.get_tcga_cnv_value(
-        raw_data_file=self._cnv_data_by_gene_thresholds)
-    values_data_frame.replace(self.cnv_code_mappings, inplace=True)
-
-    # Because there are only a handful of allowed cell values, setting the
-    # 'category' data type yields a substantial memory savings, from 678,819
-    # bytes per column for the full data set, to 11,324 bytes per column (that's
-    # a factor of 60).
-    return values_data_frame.astype('category')
+    # TODO(dlroxe): Consider returning an explicit copy.
+    return self._threshold_data
 
   # TODO(dlroxe): Probably it's worth documenting the join() semantics more
   #               carefully, particularly regarding the indices, in
   #               merge_cnv_phenotypes().
-  def merge_cnv_phenotypes(
-      self, cnv_data: Optional[pandas.DataFrame] = None) -> pandas.DataFrame:
+  def merge_cnv_phenotypes(self) -> pandas.DataFrame:
     """
     Merges TCGA 'sample type' and 'primary disease' phenotypes with CNV data.
 
@@ -201,13 +221,13 @@ class TcgaCnvParser:
 
 
     :param cnv_data: a dataframe obtained from
-      get_tcga_cnv() or get_tcga_value()
+      get_tcga_cnv() or get_tcga_cnv_value()
     :param phenotype_data: a dataframe based derived from data referenced by
       FLAGS.cnv_data_phenotypes
     :return: a merged dataframe that combines CNV value/threshold data with CNV
      phenotype data.
     """
-    cnv = self.get_tcga_cnv() if cnv_data is None else cnv_data
+    cnv = self.get_tcga_cnv()
 
     logging.info(
       'merging cnv and phenotype:\n%s\n%s', cnv, self._phenotype_data)
@@ -264,8 +284,9 @@ class TcgaCnvParser:
     return df.astype({'entrez': 'Int64'})
 
   # TODO(dlroxe): Fix up the function docstring below.
-  def cooccurance_analysis(self, df: pandas.DataFrame, gene01: str, gene02: str,
-                           cnv_spec: List[str]) -> None:
+  def co_occurrence_analysis(self, df: pandas.DataFrame, gene01: str,
+                             gene02: str,
+                             cnv_spec: List[str]) -> None:
     """
     For example, 'sheet 1' should have something like this:
 

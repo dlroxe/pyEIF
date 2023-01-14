@@ -87,6 +87,35 @@ flags.DEFINE_string('top_homdel_path',
 pandas.options.mode.chained_assignment = 'raise'
 
 
+def _get_precomputed_paths():
+  # TOP_AMP_PATH, TOP_GAIN_PATH, TOP_HOMDEL_PATH are obtained from R-generated
+  # CSV files for the time being, because pathway analysis is harder in Python
+  # than in R.
+  #
+  # The relevant R code invokes ReactomePA::enrichPathway(),
+  # which is implemented using 'enricher_internal()', which is defined here:
+  #
+  # https://github.com/YuLab-SMU/DOSE/blob/37572b5a462843dd2478ecf4bcf583bbedd1a357/R/enricher_internal.R
+  #
+  # It may be possible to build similar functionality in Python on top of the
+  # same SQLite database used by the Reactome package:
+  #
+  # reactome_db_handle = reactome_lookup.ReactomeLookup(
+  #  _abspath(os.path.join(FLAGS.data_directory, FLAGS.reactome_sqlite)))
+  def read_top_path(file):
+    loc = _abspath(os.path.join(FLAGS.output_directory, file))
+    if os.path.exists(loc):
+      return datatable.fread(loc).to_pandas()
+    else:
+      logging.warng('could not read: %s', loc)
+
+  return (
+    read_top_path(FLAGS.top_amp_path),
+    read_top_path(FLAGS.top_gain_path),
+    read_top_path(FLAGS.top_homdel_path),
+  )
+
+
 def _abspath(path):
   # What an absurd incantation to resolve "~"; but OK. Thanks, StackOverflow.
   return os.path.abspath(os.path.expanduser(os.path.expandvars(path)))
@@ -110,38 +139,18 @@ def main(unused_argv):
     raw_data_file=FLAGS.cnv_data_by_gene_values)
   logging.info('all data\n%s', all_data)
 
-  raw_threshold_data = parser.get_tcga_cnv_value(
-    raw_data_file=FLAGS.cnv_data_by_gene_thresholds)
-  all_threshold_data = parser.get_tcga_cnv(
-    values_data_frame=raw_threshold_data)
+  all_threshold_data = parser.get_tcga_cnv()
   eif_threshold_data = all_threshold_data[eif_genes]
   logging.info('eif threshold data\n%s', eif_threshold_data)
 
-  merged_phenotyped_data = parser.merge_cnv_phenotypes(
-    all_threshold_data)
+  merged_phenotyped_data = parser.merge_cnv_phenotypes()
   logging.info('all threshold data, merged with phenotypes:\n%s',
                merged_phenotyped_data)
-
-  # TOP_AMP_PATH, TOP_GAIN_PATH, TOP_HOMDEL_PATH are obtained from R-generated
-  # CSV files for the time being, because pathway analysis is harder in Python
-  # than in R.
-  #
-  # The relevant R code invokes ReactomePA::enrichPathway(),
-  # which is implemented using 'enricher_internal()', which is defined here:
-  #
-  # https://github.com/YuLab-SMU/DOSE/blob/37572b5a462843dd2478ecf4bcf583bbedd1a357/R/enricher_internal.R
-  #
-  # It may be possible to build similar functionality in Python on top of the
-  # same SQLite database used by the Reactome package:
-  #
-  # reactome_db_handle = reactome_lookup.ReactomeLookup(
-  #  _abspath(os.path.join(FLAGS.data_directory, FLAGS.reactome_sqlite)))
 
   org_hs_eg_db_handle = org_hs_eg_db_lookup.OrgHsEgDbLookup(
     _abspath(os.path.join(FLAGS.data_directory, FLAGS.org_hs_eg_sqlite)))
 
-  top_amp_path = datatable.fread(
-    file=os.path.join(FLAGS.output_directory, FLAGS.top_amp_path)).to_pandas()
+  top_amp_path, top_gain_path, top_homdel_path = _get_precomputed_paths()
 
   sample_count = len(all_threshold_data.index)
   melted_threshold_data = parser.melt_threshold_data(all_threshold_data)
@@ -152,8 +161,6 @@ def main(unused_argv):
     genedb_handle=org_hs_eg_db_handle)
   logging.info('top amp genes:\n%s', top_amp_genes)
 
-  top_gain_path = datatable.fread(
-    file=os.path.join(FLAGS.output_directory, FLAGS.top_gain_path)).to_pandas()
   top_gain_genes = parser.get_top_genes(
     sample_count=sample_count,
     df=melted_threshold_data,
@@ -162,9 +169,6 @@ def main(unused_argv):
     genedb_handle=org_hs_eg_db_handle)
   logging.info('top gain genes:\n%s', top_gain_genes)
 
-  top_homdel_path = datatable.fread(
-    file=os.path.join(FLAGS.output_directory,
-                      FLAGS.top_homdel_path)).to_pandas()
   top_homdel_genes = parser.get_top_genes(
     sample_count=sample_count,
     df=melted_threshold_data,
@@ -177,38 +181,41 @@ def main(unused_argv):
       path=os.path.join(top_genes_base_path, 'TOP_AMP_genes.xlsx')) as writer:
     # TODO(dlroxe): rownames=True
     top_amp_genes.to_excel(writer, sheet_name='1')
-    top_amp_path.to_excel(writer, sheet_name='2')
+    if top_amp_path is not None:
+      top_amp_path.to_excel(writer, sheet_name='2')
 
   with pandas.ExcelWriter(
       path=os.path.join(top_genes_base_path, 'TOP_GAIN_genes.xlsx')) as writer:
     # TODO(dlroxe): rownames=True
     top_gain_genes.to_excel(writer, sheet_name='1')
-    top_gain_path.to_excel(writer, sheet_name='2')
+    if top_gain_path is not None:
+      top_gain_path.to_excel(writer, sheet_name='2')
 
   with pandas.ExcelWriter(path=os.path.join(top_genes_base_path,
                                             'TOP_HOMDEL_genes.xlsx')) as writer:
     # TODO(dlroxe): rownames=True
     top_homdel_genes.to_excel(writer, sheet_name='1')
-    top_homdel_path.to_excel(writer, sheet_name='2')
+    if top_homdel_path is not None:
+      top_homdel_path.to_excel(writer, sheet_name='2')
 
   logging.info('"top genes" analyses have been written under %s.',
                top_genes_base_path)
 
-  logging.info('attempting cooccurance analysis 1')
-  parser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1",
-                              gene02="EIF3E", cnv_spec=["AMP", ])
+  logging.info('attempting co-occurrence analysis: 4G1,3E + AMP')
+  parser.co_occurrence_analysis(df=all_threshold_data, gene01="EIF4G1",
+                                gene02="EIF3E", cnv_spec=["AMP", ])
 
-  logging.info('attempting coocurrance analysis 2')
-  parser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1",
-                              gene02="EIF3E", cnv_spec=["AMP", "DUP"])
+  logging.info('attempting co-occurrence analysis: 4G1,3E + AMP,DUP')
+  parser.co_occurrence_analysis(df=all_threshold_data, gene01="EIF4G1",
+                                gene02="EIF3E", cnv_spec=["AMP", "DUP"])
 
-  logging.info('attempting coocurrance analysis 3')
-  parser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1",
-                              gene02="EIF3H", cnv_spec=["AMP", ])
+  logging.info('attempting co-occurrence analysis 4G1,3H + AMP')
+  parser.co_occurrence_analysis(df=all_threshold_data, gene01="EIF4G1",
+                                gene02="EIF3H", cnv_spec=["AMP", ])
 
-  logging.info('attempting coocurrance analysis 4')
-  parser.cooccurance_analysis(df=all_threshold_data, gene01="EIF4G1",
-                              gene02="EIF3H", cnv_spec=["AMP", "DUP"])
+  logging.info('attempting co-occurrence analysis 4G1,3H + AMP,DUP')
+  parser.co_occurrence_analysis(df=all_threshold_data, gene01="EIF4G1",
+                                gene02="EIF3H", cnv_spec=["AMP", "DUP"])
 
   logging.info('processing complete')
 

@@ -24,11 +24,15 @@ class UnitTests(absltest.TestCase):
         ['DIPLOID', 'DIPLOID', 'DIPLOID', 'DIPLOID', 'DIPLOID'],
     }).set_index('Sample').astype('category')
 
-    parser = tcga_cnv_parser.TcgaCnvParser('', '', '', '', '')
-    all_threshold_data = parser.get_tcga_cnv(
-      values_data_frame=raw_threshold_data)
-    self.assertTrue(all_threshold_data.equals(expected_threshold_data),
-                    msg=all_threshold_data.compare(expected_threshold_data))
+    # TODO(dlroxe): It would be better to write data files and read them than
+    #               to set _threshold_raw_data and _threshold_data, or to call
+    #               _init_threshold_data().
+    parser = tcga_cnv_parser.TcgaCnvParser(None, None, None, None, None)
+    parser._threshold_raw_data = raw_threshold_data
+    parser._threshold_data = parser._init_threshold_data()
+    all_threshold_data = parser.get_tcga_cnv()
+    self.assertTrue(expected_threshold_data.equals(all_threshold_data),
+                    msg=expected_threshold_data.compare(all_threshold_data))
 
   def test_phenotype_join(self):
     threshold_data = pandas.DataFrame({
@@ -37,13 +41,13 @@ class UnitTests(absltest.TestCase):
       'TCGA-S9-A7J2-01': ['HOMDEL', 'DEL', 'DEL', 'DEL', 'DEL'],
       'TCGA-06-0150-01':
         ['DIPLOID', 'DIPLOID', 'DIPLOID', 'DIPLOID', 'DIPLOID'],
-    }).set_index('Sample').transpose()
+    }).set_index('Sample').transpose().astype('category')
 
     phenotype_data = pandas.DataFrame({
       'Sample': ['TCGA-A5-A0GI-01', 'TCGA-S9-A7J2-01', 'TCGA-06-0150-01'],
       'sample.type': ['type1', 'type1', 'type2'],
       'primary_disease': ['disease1', 'disease2', 'disease2'],
-    }).set_index('Sample')
+    }).set_index('Sample').astype('string')
 
     expected_joined_data = pandas.DataFrame({
       'Sample':
@@ -56,14 +60,22 @@ class UnitTests(absltest.TestCase):
       'TCGA-06-0150-01':
         ['DIPLOID', 'DIPLOID', 'DIPLOID', 'DIPLOID', 'DIPLOID', 'type2',
          'disease2'],
+    }).set_index('Sample').transpose().astype({
+      'gene1': 'category',
+      'gene2': 'category',
+      'gene3': 'category',
+      'gene4': 'category',
+      'gene5': 'category',
+      'sample.type': 'string',
+      'primary_disease': 'string',
+    })
 
-    }).set_index('Sample').transpose()
-
-    # TODO(dlroxe): write a phenotype_data CSV file to disk, and have
-    #               the test read it.
-    parser = tcga_cnv_parser.TcgaCnvParser('', '', '', '', '')
+    # TODO(dlroxe): write threshold and phenotype data CSV files to disk,
+    #               and have the test read them.
+    parser = tcga_cnv_parser.TcgaCnvParser(None, None, None, None, None)
+    parser._threshold_data = threshold_data
     parser._phenotype_data = phenotype_data
-    joined_data = parser.merge_cnv_phenotypes(cnv_data=threshold_data)
+    joined_data = parser.merge_cnv_phenotypes()
 
     self.assertTrue(joined_data.equals(expected_joined_data),
                     msg='\n' + joined_data.compare(expected_joined_data))
