@@ -19,12 +19,8 @@ from typing import List, Optional
 
 import datatable
 import os
-import pandas
-import sys
-
-sys.path += ['input_data_adapters']
-
 import org_hs_eg_db_lookup
+import pandas
 
 
 class TcgaCnvParser:
@@ -70,6 +66,13 @@ class TcgaCnvParser:
     self._phenotype_data: Optional[
       pandas.DataFrame] = self._init_phenotype_data()
 
+  # As usual for Python, the leading '_' for this and the other _init...()
+  # functions that follow is a signal to programmers that they ought not to
+  # call this function from outside the class.  In this case, the reason is
+  # that reading the CNV data from disk is computationally expensive, and the
+  # idea is to arrange the program in such a way as to guarantee that the
+  # expensive operation is performed exactly once (specifically, during
+  # the __init__() call when an instance of TcgaCnvParser is constructed.
   def _init_raw_values_data(self) -> Optional[pandas.DataFrame]:
     if self._cnv_data_by_gene_values is None:
       logging.warning('no raw CNV data file specified')
@@ -342,7 +345,8 @@ class TcgaCnvParser:
     """
     df = df[[gene01, gene02]]
 
-    # TODO(dlroxe): Consider using 'crosstab' for this.
+    # TODO(dlroxe): Consider using 'crosstab' for this (see also
+    #               'contingency table'.
     gene01y_gene02y = len(
       df[df[gene01].isin(cnv_spec) & df[gene02].isin(cnv_spec)])
     gene01y_gene02n = len(

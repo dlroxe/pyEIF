@@ -122,7 +122,9 @@ def _abspath(path):
 
 
 def main(unused_argv):
-  # TODO(dlroxe): Decide whether logging to stdout is desired in the long term.
+  # TODO(dlroxe): The next line causes the logging module to write to stdout
+  #               rather than to its traditional log file.
+  #               Decide whether logging to stdout is desired in the long term.
   logging.get_absl_handler().python_handler.stream = sys.stdout
 
   eif_genes = ["EIF4G1", "EIF3E", "EIF3H", ]
@@ -134,6 +136,9 @@ def main(unused_argv):
     cnv_data_by_gene_values=FLAGS.cnv_data_by_gene_values,
     cnv_data_phenotypes=FLAGS.cnv_data_phenotypes,
   )
+  # All the expensive datatable.fread() work, and parsing, for CNV data, is now
+  # done.  The processed data can now be accessed repeatedly without significant
+  # cost.
 
   all_data = parser.get_tcga_cnv_value()
   logging.info('all data\n%s', all_data)
