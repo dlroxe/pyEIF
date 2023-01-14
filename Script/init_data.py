@@ -151,22 +151,13 @@ def main(unused_argv):
 
   top_amp_path, top_gain_path, top_homdel_path = _get_precomputed_paths()
 
-  sample_count = len(all_threshold_data.index)
-  melted_threshold_data = parser.melt_threshold_data(all_threshold_data)
-
-  def get_top_genes(labels, percent):
-    return parser.get_top_genes(
-      sample_count=sample_count,
-      df=melted_threshold_data, labels=labels, percent=percent,
-      genedb_handle=org_hs_eg_db_handle)
-
-  top_amp_genes = get_top_genes(["AMP"], 5)
+  top_amp_genes = parser.get_top_genes(["AMP"], 5, org_hs_eg_db_handle)
   logging.info('top amp genes:\n%s', top_amp_genes)
 
-  top_gain_genes = get_top_genes(["DUP", "AMP"], 30)
+  top_gain_genes = parser.get_top_genes(["DUP", "AMP"], 30, org_hs_eg_db_handle)
   logging.info('top gain genes:\n%s', top_gain_genes)
 
-  top_homdel_genes = get_top_genes(["HOMDEL"], 5)
+  top_homdel_genes = parser.get_top_genes(["HOMDEL"], 5, org_hs_eg_db_handle)
   logging.info('top homdel genes:\n%s', top_homdel_genes)
 
   top_genes_base_path = os.path.join(FLAGS.output_directory, "Fig1")

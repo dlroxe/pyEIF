@@ -65,6 +65,8 @@ class TcgaCnvParser:
       pandas.DataFrame] = self._init_threshold_raw_data()  # -2, -1, etc.
     self._threshold_data: Optional[
       pandas.DataFrame] = self._init_threshold_data()  # HOMDEL, DEL, etc.
+    self._melted_threshold_data: Optional[
+      pandas.DataFrame] = self._init_melted_threshold_data()
     self._phenotype_data: Optional[
       pandas.DataFrame] = self._init_phenotype_data()
 
@@ -124,6 +126,20 @@ class TcgaCnvParser:
     logging.info('initializing thresholds from:\n%s', self._threshold_raw_data)
     values_data_frame.replace(self.cnv_code_mappings, inplace=True)
     return values_data_frame.astype('category')
+
+  def _init_melted_threshold_data(self):
+    if self._threshold_data is None:
+      logging.warning('no threshold data is available')
+      return None
+
+    df = pandas.DataFrame(self._threshold_data, copy=True)
+    df.index.name = 'rowname'
+    df.reset_index(inplace=True)
+    df = df.melt(
+      id_vars=['rowname'], var_name='Gene', value_name='Value',
+      ignore_index=True)
+    df.set_index('rowname', inplace=True)
+    return df
 
   def _init_phenotype_data(self) -> Optional[pandas.DataFrame]:
     if not self._cnv_data_phenotypes:
@@ -276,31 +292,15 @@ class TcgaCnvParser:
     cnv = self.get_tcga_cnv_threshold_categories()  # this is a fresh copy
     return cnv.join(self._phenotype_data, how='inner')
 
-  # TODO(dlroxe): Reconsider how this could be organized.  It lives here for
-  #               now so that both init_data.py and tcga_cnv_parser_tests.py
-  #               can use it conveniently.
-  @staticmethod
-  def melt_threshold_data(df: pandas.DataFrame) -> pandas.DataFrame:
-    # make a copy; then modify the copy in-place
-    df = pandas.DataFrame(df, copy=True)
-    df.index.name = 'rowname'
-    df.reset_index(inplace=True)
-    df = df.melt(
-      id_vars=['rowname'], var_name='Gene', value_name='Value',
-      ignore_index=True)
-    df.set_index('rowname', inplace=True)
-    return df
-
-  # TODO(dlroxe): Document this method, and reconsider how it could be
-  #               organized.
-  @staticmethod
+  # TODO(dlroxe): Document this method.
   def get_top_genes(
-      sample_count: int,
-      df: pandas.DataFrame,
+      self,
       labels: List[str],
       percent: int,
       genedb_handle: org_hs_eg_db_lookup.OrgHsEgDbLookup,
   ) -> pandas.DataFrame:
+    sample_count = len(self._threshold_data.index)
+    df = self._melted_threshold_data
     df = df.loc[lambda x: x['Value'].isin(labels)]
     df = df.groupby(by='Gene').count()
     df = df.apply(lambda x: 100 * x / sample_count)

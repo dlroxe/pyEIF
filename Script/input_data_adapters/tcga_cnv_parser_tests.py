@@ -90,41 +90,34 @@ class UnitTests(absltest.TestCase):
     }).set_index('Sample').transpose()
 
     sample_count = len(threshold_data.index)
-    melted_threshold_data = tcga_cnv_parser.TcgaCnvParser.melt_threshold_data(
-      threshold_data)
+    # TODO(dlroxe): Reconstruct tests to avoid calling class internals.
+    parser = tcga_cnv_parser.TcgaCnvParser(None, None, None, None, None)
+    parser._threshold_data = threshold_data
+    parser._melted_threshold_data = parser._init_melted_threshold_data()
 
     genedb_handle = org_hs_eg_db_lookup.OrgHsEgDbLookup(org_hs_eg_db_file=None)
-    top_genes = tcga_cnv_parser.TcgaCnvParser.get_top_genes  # for convenience
+    top_genes = parser.get_top_genes  # for convenience
 
-    top_genes01 = top_genes(sample_count=sample_count, df=melted_threshold_data,
-                            labels=['AMP'], percent=30,
+    top_genes01 = top_genes(labels=['AMP'], percent=30,
                             genedb_handle=genedb_handle)
-    top_genes02 = top_genes(sample_count=sample_count, df=melted_threshold_data,
-                            labels=['AMP'], percent=40,
+    top_genes02 = top_genes(labels=['AMP'], percent=40,
                             genedb_handle=genedb_handle)
-    top_genes03 = top_genes(sample_count=sample_count, df=melted_threshold_data,
-                            labels=['AMP', 'DUP'],
+    top_genes03 = top_genes(labels=['AMP', 'DUP'],
                             percent=30,
                             genedb_handle=genedb_handle)
-    top_genes04 = top_genes(sample_count=sample_count, df=melted_threshold_data,
-                            labels=['AMP', 'DUP'],
+    top_genes04 = top_genes(labels=['AMP', 'DUP'],
                             percent=40,
                             genedb_handle=genedb_handle)
-    top_genes05 = top_genes(sample_count=sample_count, df=melted_threshold_data,
-                            labels=['AMP', 'DIPLOID', 'DUP'],
+    top_genes05 = top_genes(labels=['AMP', 'DIPLOID', 'DUP'],
                             percent=30, genedb_handle=genedb_handle)
-    top_genes06 = top_genes(sample_count=sample_count, df=melted_threshold_data,
-                            labels=['AMP', 'DIPLOID', 'DUP'],
+    top_genes06 = top_genes(labels=['AMP', 'DIPLOID', 'DUP'],
                             percent=60, genedb_handle=genedb_handle)
-    top_genes07 = top_genes(sample_count=sample_count, df=melted_threshold_data,
-                            labels=['AMP', 'DIPLOID', 'DUP'],
+    top_genes07 = top_genes(labels=['AMP', 'DIPLOID', 'DUP'],
                             percent=70, genedb_handle=genedb_handle)
-    top_genes08 = top_genes(sample_count=sample_count, df=melted_threshold_data,
-                            labels=['DIPLOID'],
+    top_genes08 = top_genes(labels=['DIPLOID'],
                             percent=30,
                             genedb_handle=genedb_handle)
-    top_genes09 = top_genes(sample_count=sample_count, df=melted_threshold_data,
-                            labels=['DIPLOID'],
+    top_genes09 = top_genes(labels=['DIPLOID'],
                             percent=60,
                             genedb_handle=genedb_handle)
 
