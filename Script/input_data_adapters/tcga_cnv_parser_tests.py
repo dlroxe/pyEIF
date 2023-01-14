@@ -59,9 +59,11 @@ class UnitTests(absltest.TestCase):
 
     }).set_index('Sample').transpose()
 
+    # TODO(dlroxe): write a phenotype_data CSV file to disk, and have
+    #               the test read it.
     parser = tcga_cnv_parser.TcgaCnvParser('', '', '', '', '')
-    joined_data = parser.merge_cnv_phenotypes(
-      cnv_data=threshold_data, phenotype_data=phenotype_data)
+    parser._phenotype_data = phenotype_data
+    joined_data = parser.merge_cnv_phenotypes(cnv_data=threshold_data)
 
     self.assertTrue(joined_data.equals(expected_joined_data),
                     msg='\n' + joined_data.compare(expected_joined_data))

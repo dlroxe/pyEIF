@@ -2,3 +2,5 @@ bazel-bin/**
 bazel-out/**
 bazel-Script/**
 bazel-testlogs/**
+bazel-Script
+

@@ -44,17 +44,52 @@ class TcgaCnvParser:
 
   def __init__(
       self,
-      data_directory: str,
-      output_directory: str,
-      cnv_data_by_gene_thresholds: str,
-      cnv_data_by_gene_values: str,
-      cnv_data_phenotypes: str,
+      data_directory: Optional[str],
+      output_directory: Optional[str],
+      cnv_data_by_gene_thresholds: Optional[str],
+      cnv_data_by_gene_values: Optional[str],
+      cnv_data_phenotypes: Optional[str],
   ):
     self._data_directory = data_directory
     self._output_directory = output_directory
     self._cnv_data_by_gene_thresholds = cnv_data_by_gene_thresholds
     self._cnv_data_by_gene_values = cnv_data_by_gene_values
     self._cnv_data_phenotypes = cnv_data_phenotypes
+    self._phenotype_data = self._init_phenotype_data()
+
+  def _init_phenotype_data(self) -> Optional[pandas.DataFrame]:
+    if not self._cnv_data_phenotypes:
+      logging.warning('no phenotype data is available')
+      return None
+
+    phenotype_file = self._abspath(os.path.join(
+      self._data_directory, self._cnv_data_phenotypes))
+    if not os.path.exists(phenotype_file):
+      logging.error('could not find phenotype data file: %s', phenotype_file)
+      return None
+
+    logging.info('initializing phenotype data from: %s', phenotype_file)
+    phenotype_data = (
+      datatable.fread(file=phenotype_file)
+      .to_pandas()[['sample', 'sample_type', '_primary_disease']]
+      .astype('string')  # accurate, and mem-efficient vs. default 'object'
+    )
+    phenotype_data.rename(
+      columns={
+        'sample': 'Sample',
+        'sample_type': 'sample.type',
+        '_primary_disease': 'primary_disease',
+      }, inplace=True)
+    phenotype_data.sort_values(by=['Sample'], inplace=True)
+    phenotype_data.set_index('Sample', inplace=True)
+    return phenotype_data
+
+  # TODO(dlroxe):  This function is cropping up in a few places; try to find
+  #                a One True Home for it.
+  @staticmethod
+  def _abspath(path):
+    # What an absurd incantation to resolve "~"; but OK. Thanks, StackOverflow.
+    return os.path.abspath(os.path.expanduser(os.path.expandvars(path)))
 
   def get_tcga_cnv_value(self, raw_data_file: str = None) -> pandas.DataFrame:
     """
@@ -144,9 +179,7 @@ class TcgaCnvParser:
   #               carefully, particularly regarding the indices, in
   #               merge_cnv_phenotypes().
   def merge_cnv_phenotypes(
-      self,
-      cnv_data: Optional[pandas.DataFrame] = None,
-      phenotype_data: Optional[pandas.DataFrame] = None) -> pandas.DataFrame:
+      self, cnv_data: Optional[pandas.DataFrame] = None) -> pandas.DataFrame:
     """
     Merges TCGA 'sample type' and 'primary disease' phenotypes with CNV data.
 
@@ -176,23 +209,9 @@ class TcgaCnvParser:
     """
     cnv = self.get_tcga_cnv() if cnv_data is None else cnv_data
 
-    if phenotype_data is None:
-      phenotype_data = (
-        datatable.fread(
-          file=os.path.join(self._data_directory, self._cnv_data_phenotypes))
-        .to_pandas()[['sample', 'sample_type', '_primary_disease']]
-        .astype('string')  # accurate, and mem-efficient vs. default 'object'
-      )
-      phenotype_data.rename(
-        columns={
-          'sample': 'Sample',
-          'sample_type': 'sample.type',
-          '_primary_disease': 'primary_disease',
-        }, inplace=True)
-      phenotype_data.sort_values(by=['Sample'], inplace=True)
-      phenotype_data.set_index('Sample', inplace=True)
-
-    return cnv.join(phenotype_data, how='inner')
+    logging.info(
+      'merging cnv and phenotype:\n%s\n%s', cnv, self._phenotype_data)
+    return cnv.join(self._phenotype_data, how='inner')
 
   # TODO(dlroxe): Reconsider how this could be organized.  It lives here for
   #               now so that both init_data.py and tcga_cnv_parser_tests.py
