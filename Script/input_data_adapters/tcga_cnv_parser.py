@@ -102,10 +102,8 @@ class TcgaCnvParser:
       logging.warning('no CNV threshold data file specified')
       return None
 
-    raw_data_file = self._abspath(
-      os.path.join(self._data_directory, self._cnv_data_by_gene_thresholds))
-
-    return self._read_tcga_cnv_values(raw_data_file)
+    return self._read_tcga_cnv_values(self._abspath(
+      os.path.join(self._data_directory, self._cnv_data_by_gene_thresholds)))
 
   def _init_threshold_data(self) -> Optional[pandas.DataFrame]:
     # Note the .replace() call, which just applies the dict, and is very quick.
@@ -127,7 +125,7 @@ class TcgaCnvParser:
       logging.warning('no threshold data is available')
       return None
 
-    df = pandas.DataFrame(self._threshold_data, copy=True)
+    df = self.get_tcga_cnv_threshold_categories()  # this is a fresh copy
     df.index.name = 'rowname'
     df.reset_index(inplace=True)
     df = df.melt(
@@ -323,7 +321,7 @@ class TcgaCnvParser:
     return df.astype({'entrez': 'Int64'})
 
   # TODO(dlroxe): Fix up the function docstring below.
-  def co_occurrence_analysis(self, df: pandas.DataFrame, gene01: str,
+  def co_occurrence_analysis(self, gene01: str,
                              gene02: str,
                              cnv_spec: List[str]) -> None:
     """
@@ -335,7 +333,7 @@ class TcgaCnvParser:
 
     That is: 2220 samples are AMP|DUP for G1, AND are either AMP|DUP for 3H.
     """
-    df = df[[gene01, gene02]]
+    df = self.get_tcga_cnv_threshold_categories()[[gene01, gene02]]
 
     # TODO(dlroxe): Consider using 'crosstab' for this (see also
     #               'contingency table'.
@@ -367,17 +365,17 @@ class TcgaCnvParser:
         row_or_col_name(gene=gene01, matches_cnv_spec=False),
       ])
 
-    logging.info('got adjusted counts:\n%s', eif)
+    logging.info('got adjusted counts:\n%s\n', eif)
 
     odds_ratio, p_value = stats.fisher_exact(eif, alternative='greater')
     fisher = pandas.DataFrame(
       data={'Odds Ratio': [odds_ratio], 'P Value': [p_value]})
-    logging.info('got fisher test:\n%s', fisher)
+    logging.info('got fisher test:\n%s\n', fisher)
 
     chi_sq, p_value = stats.chisquare(eif)
     chi_test = pandas.DataFrame(
       data={'Chi-Squared': [chi_sq], 'P Value': [p_value]})
-    logging.info('got chi-sq test:\n%s', chi_test)
+    logging.info('got chi-sq test:\n%s\n', chi_test)
 
     excel_output_file = os.path.join(
       self._output_directory, "Fig1",

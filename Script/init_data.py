@@ -20,6 +20,8 @@ names they are given in the repositories where they are officially
 maintained.
 """
 
+from typing import List
+
 from absl import app
 from absl import flags
 from absl import logging
@@ -29,7 +31,7 @@ import os
 import pandas
 import sys
 
-sys.path += ['input_data_adapters']
+sys.path += ['./input_data_adapters']
 
 import org_hs_eg_db_lookup
 import tcga_cnv_parser
@@ -107,7 +109,8 @@ def _get_precomputed_paths():
     if os.path.exists(loc):
       return datatable.fread(loc).to_pandas()
     else:
-      logging.warng('could not read: %s', loc)
+      logging.warning('could not read: %s', loc)
+      return None
 
   return (
     read_top_path(FLAGS.top_amp_path),
@@ -154,57 +157,44 @@ def main(unused_argv):
   org_hs_eg_db_handle = org_hs_eg_db_lookup.OrgHsEgDbLookup(
     _abspath(os.path.join(FLAGS.data_directory, FLAGS.org_hs_eg_sqlite)))
 
-  top_amp_path, top_gain_path, top_homdel_path = _get_precomputed_paths()
+  top_amp_paths, top_gain_paths, top_homdel_paths = _get_precomputed_paths()
 
-  top_amp_genes = parser.get_top_genes(["AMP"], 5, org_hs_eg_db_handle)
+  def top_genes(cnv_spec: List[str], percent: int) -> pandas.DataFrame:
+    return parser.get_top_genes(cnv_spec, percent, org_hs_eg_db_handle)
+
+  top_amp_genes = top_genes(["AMP"], 5)
   logging.info('top amp genes:\n%s', top_amp_genes)
 
-  top_gain_genes = parser.get_top_genes(["DUP", "AMP"], 30, org_hs_eg_db_handle)
+  top_gain_genes = top_genes(["DUP", "AMP"], 30)
   logging.info('top gain genes:\n%s', top_gain_genes)
 
-  top_homdel_genes = parser.get_top_genes(["HOMDEL"], 5, org_hs_eg_db_handle)
+  top_homdel_genes = top_genes(["HOMDEL"], 5)
   logging.info('top homdel genes:\n%s', top_homdel_genes)
 
-  top_genes_base_path = os.path.join(FLAGS.output_directory, "Fig1")
-  with pandas.ExcelWriter(
-      path=os.path.join(top_genes_base_path, 'TOP_AMP_genes.xlsx')) as writer:
-    # TODO(dlroxe): rownames=True
-    top_amp_genes.to_excel(writer, sheet_name='1')
-    if top_amp_path is not None:
-      top_amp_path.to_excel(writer, sheet_name='2')
+  def write_excel(name, genes, pathways):
+    top_genes_base_path = os.path.join(FLAGS.output_directory, "Fig1")
+    with pandas.ExcelWriter(
+        path=os.path.join(top_genes_base_path, name)) as writer:
+      # TODO(dlroxe): rownames=True
+      genes.to_excel(writer, sheet_name='1')
+      if pathways is not None:
+        pathways.to_excel(writer, sheet_name='2')
 
-  with pandas.ExcelWriter(
-      path=os.path.join(top_genes_base_path, 'TOP_GAIN_genes.xlsx')) as writer:
-    # TODO(dlroxe): rownames=True
-    top_gain_genes.to_excel(writer, sheet_name='1')
-    if top_gain_path is not None:
-      top_gain_path.to_excel(writer, sheet_name='2')
+  write_excel('TOP_AMP_genes.xlsx', top_amp_genes, top_amp_paths)
+  write_excel('TOP_GAIN_genes.xlsx', top_gain_genes, top_gain_paths)
+  write_excel('TOP_HOMDEL_genes.xlsx', top_homdel_genes, top_homdel_paths)
 
-  with pandas.ExcelWriter(path=os.path.join(top_genes_base_path,
-                                            'TOP_HOMDEL_genes.xlsx')) as writer:
-    # TODO(dlroxe): rownames=True
-    top_homdel_genes.to_excel(writer, sheet_name='1')
-    if top_homdel_path is not None:
-      top_homdel_path.to_excel(writer, sheet_name='2')
+  logging.info('co-occurrence analysis: 4G1,3E + AMP')
+  parser.co_occurrence_analysis("EIF4G1", "EIF3E", ["AMP", ])
 
-  logging.info('"top genes" analyses have been written under %s.',
-               top_genes_base_path)
+  logging.info('co-occurrence analysis: 4G1,3E + AMP,DUP')
+  parser.co_occurrence_analysis("EIF4G1", "EIF3E", ["AMP", "DUP"])
 
-  logging.info('attempting co-occurrence analysis: 4G1,3E + AMP')
-  parser.co_occurrence_analysis(df=all_threshold_data, gene01="EIF4G1",
-                                gene02="EIF3E", cnv_spec=["AMP", ])
-
-  logging.info('attempting co-occurrence analysis: 4G1,3E + AMP,DUP')
-  parser.co_occurrence_analysis(df=all_threshold_data, gene01="EIF4G1",
-                                gene02="EIF3E", cnv_spec=["AMP", "DUP"])
-
-  logging.info('attempting co-occurrence analysis 4G1,3H + AMP')
-  parser.co_occurrence_analysis(df=all_threshold_data, gene01="EIF4G1",
-                                gene02="EIF3H", cnv_spec=["AMP", ])
+  logging.info('co-occurrence analysis 4G1,3H + AMP')
+  parser.co_occurrence_analysis("EIF4G1", "EIF3H", ["AMP", ])
 
   logging.info('attempting co-occurrence analysis 4G1,3H + AMP,DUP')
-  parser.co_occurrence_analysis(df=all_threshold_data, gene01="EIF4G1",
-                                gene02="EIF3H", cnv_spec=["AMP", "DUP"])
+  parser.co_occurrence_analysis("EIF4G1", "EIF3H", ["AMP", "DUP"])
 
   logging.info('processing complete')
 
