@@ -36,5 +36,14 @@ py_test(
     name = "tcga_cnv_parser_tests",
     size = "small",
     srcs = ["input_data_adapters/tcga_cnv_parser_tests.py"],
-    deps = [":init_data"],
+    data = [":test_data"],
+    deps = [":tcga_cnv_parser"],
+)
+
+filegroup(
+    name = "test_data",
+    srcs = [
+        "input_data_adapters/test_data/phenotype-01.csv",
+        "input_data_adapters/test_data/threshold-01.csv",
+    ],
 )
