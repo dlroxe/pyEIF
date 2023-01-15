@@ -1,9 +1,10 @@
 ## EXPERIMENTAL
 ## use the following python code to perform pathway enrichment analysis
+from typing import List
 import gseapy
 
 
-# Call this e.g. as follows:
+# Call this e.g. as follows:1
 # enr = generate_enriched_data(top_amp_genes['Gene'])
 def generate_enriched_data(gene_list: List[str]):
   return gseapy.enrichr(
@@ -16,8 +17,8 @@ def generate_enriched_data(gene_list: List[str]):
   )
 
 
-gene_list = []  # use a 'real' gene list for 'real results
-enr = generate_enriched_data(gene_list)
+target_gene_list = []  # use a 'real' gene list for 'real results
+enr = generate_enriched_data(target_gene_list)
 
 enr.results.head(15)
 
