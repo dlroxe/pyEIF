@@ -32,20 +32,18 @@ import pandas
 import sys
 
 sys.path += ['./input_data_adapters']
-sys.path += ['input_data_adapters']
-# sys.path.remove('./input_data_adapters') To remove unwanted entry 
 
 import org_hs_eg_db_lookup
 import tcga_cnv_parser
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string('data_directory',
-                    '~/Documents/Bioinformatics_analysis/eIF4G-analysis/eIF4G_data',
-                    #os.path.join('~', 'Desktop', 'pyeif_data'),
+                    # '~/Documents/Bioinformatics_analysis/eIF4G-analysis/eIF4G_data',
+                    os.path.join('~', 'Desktop', 'pyeif_data'),
                     'parent dir for data files')
 flags.DEFINE_string('output_directory',
-                    '~/Documents/Bioinformatics_analysis/eIF4G-analysis/eIF4G_output',
-                    #os.path.join('~', 'Desktop', 'pyeif_output'),
+                    # '~/Documents/Bioinformatics_analysis/eIF4G-analysis/eIF4G_output',
+                    os.path.join('~', 'Desktop', 'pyeif_output'),
                     'parent dir for output')
 flags.DEFINE_string('cnv_data_by_gene_values',
                     'Gistic2_CopyNumber_Gistic2_all_data_by_genes',
@@ -168,39 +166,6 @@ def main(unused_argv):
 
   top_amp_genes = top_genes(["AMP"], 5)
   logging.info('top amp genes:\n%s', top_amp_genes)
-
-    ## use the following python code to perform pathway enrichment analysis
-    import gseapy as gp
-    enr = gp.enrichr(gene_list=top_amp_genes['Gene'], # or "./tests/data/gene_list.txt",
-                     gene_sets=['Reactome_2022'],
-                     organism='human', # don't forget to set organism to the one you desired! e.g. Yeast
-                     outdir=None, # don't write to disk
-                    )
-    enr.results.head(15)
-    
-    from gseapy import barplot, dotplot
-    ax = dotplot(enr.results,
-                  column="Adjusted P-value",
-                  #x='Gene_set', # set x axis, so you could do a multi-sample/library comparsion
-                  size=10,
-                  top_term=8,
-                  figsize=(3,5),
-                  cutoff=1,
-                  title = "Reactome",
-                  xticklabels_rot=45, # rotate xtick labels
-                  show_ring=True, # set to False to revmove outer ring
-                  #marker='o',
-                 )
-    
-    ax = barplot(enr.results,
-                  column="Adjusted P-value",
-                  group='Gene_set', # set group, so you could do a multi-sample/library comparsion
-                  size=8,
-                  top_term=10,
-                  figsize=(3,5),cutoff=1,
-                  color=['darkred', 'darkblue'] # set colors for group
-                 )
-    ##
 
   top_gain_genes = top_genes(["DUP", "AMP"], 30)
   logging.info('top gain genes:\n%s', top_gain_genes)
