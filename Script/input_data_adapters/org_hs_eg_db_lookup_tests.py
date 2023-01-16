@@ -10,5 +10,5 @@ class UnitTests(absltest.TestCase):
 
   def test_degenerate_case(self):
     handle = org_hs_eg_db_lookup.OrgHsEgDbLookup(org_hs_eg_db_file=None)
-    self.assertEqual(pandas.NA,
-                     handle.translate_gene_symbol_to_entrez_id('foo'))
+    self.assertIs(pandas.NA,
+                  handle.translate_gene_symbol_to_entrez_id('foo'))

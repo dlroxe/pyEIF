@@ -19,8 +19,21 @@ from typing import List, Optional
 
 import datatable
 import os
-import org_hs_eg_db_lookup
 import pandas
+
+# TODO(dlroxe): This seems silly.  I revised the project structure so that
+#               now there are __init__.py files to aid module import, and
+#               init_data.py no longer has
+#               "sys.path += ['./input_data_adapters']".  However, when tests
+#               in this directory invoke tcga_cnv_parser, org_hs_eg_db_lookup
+#               needs to be referenced a different way than when init_data.py
+#               invokes it.  I can't really understand that; but anyway I work
+#               around the issue for now with a try/except that attempts the
+#               import both ways, and uses the one that works.
+try:
+  from input_data_adapters import org_hs_eg_db_lookup
+except:
+  import org_hs_eg_db_lookup
 
 
 class TcgaCnvParser:
