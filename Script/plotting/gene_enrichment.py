@@ -4,7 +4,7 @@ from typing import List
 import gseapy
 
 
-# Call this e.g. as follows:1
+# Call this e.g. as follows:
 # enr = generate_enriched_data(top_amp_genes['Gene'])
 def generate_enriched_data(gene_list: List[str]):
   return gseapy.enrichr(

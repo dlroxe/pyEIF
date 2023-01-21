@@ -20,21 +20,22 @@ names they are given in the repositories where they are officially
 maintained.
 """
 
-from typing import List
-
 from absl import app
 from absl import flags
 from absl import logging
+from typing import List
+
+# TODO(dlroxe): This package structure is an improvement on the
+#               prior use of "sys.path += ['./input_data_adapters']",
+#               but probably still could use some thought.  It would be
+#               nice, for example, not to have to resort to 'from' syntax.
+from input_data_adapters import org_hs_eg_db_lookup
+from input_data_adapters import tcga_cnv_parser
 
 import datatable
 import os
 import pandas
 import sys
-
-sys.path += ['./input_data_adapters']
-
-import org_hs_eg_db_lookup
-import tcga_cnv_parser
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string('data_directory',

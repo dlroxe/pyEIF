@@ -3,8 +3,8 @@
 from absl.testing import absltest
 
 import org_hs_eg_db_lookup
-import tcga_cnv_parser
 import pandas
+import tcga_cnv_parser
 
 
 class UnitTests(absltest.TestCase):
@@ -17,8 +17,9 @@ class UnitTests(absltest.TestCase):
         ['DIPLOID', 'DIPLOID', 'DIPLOID', 'DIPLOID', 'DIPLOID'],
     }).set_index('Sample').transpose().astype('category')
 
-    parser = tcga_cnv_parser.TcgaCnvParser('./input_data_adapters/test_data',
-                                           None, 'threshold-01.csv', None, None)
+    parser = tcga_cnv_parser.TcgaCnvParser(
+      './input_data_adapters/test_data',
+      None, 'threshold-01.csv', None, None)
     all_threshold_data = parser.get_tcga_cnv_threshold_categories()
     self.assertTrue(expected_threshold_data.equals(all_threshold_data),
                     msg=expected_threshold_data.compare(all_threshold_data))
@@ -57,7 +58,8 @@ class UnitTests(absltest.TestCase):
     parser = tcga_cnv_parser.TcgaCnvParser(
       './input_data_adapters/test_data', None, 'threshold-01.csv', None, None)
 
-    genedb_handle = org_hs_eg_db_lookup.OrgHsEgDbLookup(org_hs_eg_db_file=None)
+    genedb_handle = org_hs_eg_db_lookup.OrgHsEgDbLookup(
+      org_hs_eg_db_file=None)
     top_genes = parser.get_top_genes  # for convenience
 
     top_genes01 = top_genes(labels=['AMP'], percent=30,

@@ -1,21 +1,28 @@
 py_binary(
     name = "init_data",
-    srcs = ["init_data.py"],
-    deps = [":init_data_lib"],
+    srcs = [
+        "__init__.py",
+        "init_data.py",
+    ],
+    deps = [":input_data_adapters"],
 )
 
 py_library(
     name = "init_data_lib",
-    srcs = ["init_data.py"],
-    deps = [
-        ":org_hs_eg_db_lookup",
-        ":tcga_cnv_parser",
+    srcs = [
+        "__init__.py",
+        "init_data.py",
     ],
+    deps = [":input_data_adapters"],
 )
 
 py_library(
-    name = "org_hs_eg_db_lookup",
-    srcs = ["input_data_adapters/org_hs_eg_db_lookup.py"],
+    name = "input_data_adapters",
+    srcs = [
+        "input_data_adapters/__init__.py",
+        "input_data_adapters/org_hs_eg_db_lookup.py",
+        "input_data_adapters/tcga_cnv_parser.py",
+    ],
 )
 
 py_test(
@@ -24,12 +31,7 @@ py_test(
     srcs = ["input_data_adapters/org_hs_eg_db_lookup_tests.py"],
     data = [
     ],
-    deps = [":org_hs_eg_db_lookup"],
-)
-
-py_library(
-    name = "tcga_cnv_parser",
-    srcs = ["input_data_adapters/tcga_cnv_parser.py"],
+    deps = [":input_data_adapters"],
 )
 
 py_test(
@@ -37,7 +39,7 @@ py_test(
     size = "small",
     srcs = ["input_data_adapters/tcga_cnv_parser_tests.py"],
     data = [":test_data"],
-    deps = [":tcga_cnv_parser"],
+    deps = [":input_data_adapters"],
 )
 
 filegroup(
