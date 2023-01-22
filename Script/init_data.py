@@ -35,6 +35,7 @@ from input_data_adapters import tcga_cnv_parser
 import datatable
 import os
 import pandas
+import polars
 import sys
 
 FLAGS = flags.FLAGS
@@ -150,6 +151,18 @@ def main(unused_argv):
   logging.info('all data\n%s', all_data)
 
   all_threshold_data = parser.get_tcga_cnv_threshold_categories()
+  logging.info('all threshold_data:\n%s', all_threshold_data)
+  cnv_threshold_output_file = _abspath(
+    os.path.join(FLAGS.output_directory, 'ProcessedData', 'TCGA_CNV.csv'))
+  logging.info('writing CNV threshold data to: %s', cnv_threshold_output_file)
+
+  # On one development system, Polars was observed to write this data in
+  # 10s, whereas Pandas was observed to take nearly 20m to do likewise.
+  polars.from_pandas(
+    all_threshold_data.reset_index()).write_csv(cnv_threshold_output_file)
+
+  logging.info('done writing CNV threshold data')
+
   eif_threshold_data = all_threshold_data[eif_genes]
   logging.info('eif threshold data\n%s', eif_threshold_data)
 
