@@ -153,7 +153,8 @@ def main(unused_argv):
   all_threshold_data = parser.get_tcga_cnv_threshold_categories()
   logging.info('all threshold_data:\n%s', all_threshold_data)
   cnv_threshold_output_file = _abspath(
-    os.path.join(FLAGS.output_directory, 'ProcessedData', 'TCGA_CNV.csv'))
+    os.path.join(
+      FLAGS.output_directory, 'ProcessedData', 'TCGA-CNV-thresholds.csv'))
   logging.info('writing CNV threshold data to: %s', cnv_threshold_output_file)
 
   # On one development system, Polars was observed to write this data in
@@ -187,7 +188,8 @@ def main(unused_argv):
   top_homdel_genes = top_genes(["HOMDEL"], 5)
   logging.info('top homdel genes:\n%s', top_homdel_genes)
 
-  def write_excel(name, genes, pathways):
+  def write_excel(
+      name: str, genes: pandas.DataFrame, pathways: pandas.DataFrame):
     top_genes_base_path = os.path.join(FLAGS.output_directory, "Fig1")
     with pandas.ExcelWriter(
         path=os.path.join(top_genes_base_path, name)) as writer:

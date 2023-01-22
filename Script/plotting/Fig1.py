@@ -130,10 +130,13 @@ class SurvivalComparisonMode(enum.Enum):
 #
 # The results of these tests are displayed on the plot.
 def combined_survival_plot(
-    gene1, gene2, tcga_cnv_os_eif, t, e, mode: SurvivalComparisonMode):
+    gene1, gene2, tcga_cnv_os_eif, mode: SurvivalComparisonMode):
   if mode not in (SurvivalComparisonMode.AMP, SurvivalComparisonMode.GAIN):
     # TODO(dlroxe): find a more appropriate exception
     raise Exception("unknown comparison mode for survival plot")
+
+  t = tcga_cnv_os_eif['OS.time']
+  e = tcga_cnv_os_eif['OS']
 
   gene1_gain = tcga_cnv_os_eif[gene1] == "AMP"
   gene2_gain = tcga_cnv_os_eif[gene2] == "AMP"
@@ -153,15 +156,19 @@ def combined_survival_plot(
   kmf.fit(
     t[gene1_gain], event_observed=e[gene1_gain], label=(gene1 + mode.name))
   kmf.plot_survival_function(ax=ax)
+
   kmf.fit(
     t[gene2_gain], event_observed=e[gene2_gain], label=(gene2 + mode.name))
   kmf.plot_survival_function(ax=ax)
+
   kmf.fit(
     t[gene1_gene2_gain], event_observed=e[gene1_gene2_gain],
     label=(gene1 + gene2 + mode.name))
   kmf.plot_survival_function(ax=ax)
+
   kmf.fit(t[diploid], event_observed=e[diploid], label="DIPLOID")
   kmf.plot_survival_function(ax=ax)
+
   ax.set(
     title='Kaplan Meier estimates by copy number status',
     xlabel='Overall survival (days after diagnosis)',
@@ -212,8 +219,8 @@ def main(unused_argv):
   logging.info('commencing KM survival analysis')
 
   supplemental_table_path = _abspath(
-    os.path.join(FLAGS.data_directory,
-                 'Survival_SupplementalTable_S1_20171025_xena_sp'))
+    os.path.join(
+      FLAGS.data_directory, 'Survival_SupplementalTable_S1_20171025_xena_sp'))
   logging.info(f'reading: {supplemental_table_path}')
 
   tcga_os = datatable.fread(supplemental_table_path, header=True).to_pandas()
@@ -221,7 +228,8 @@ def main(unused_argv):
   tcga_os = tcga_os[['OS', 'OS.time']]
 
   tcga_cnv_path = _abspath(
-    os.path.join(FLAGS.output_directory, 'ProcessedData', 'TCGA_CNV.csv'))
+    os.path.join(
+      FLAGS.output_directory, 'ProcessedData', 'TCGA-CNV-thresholds.csv'))
   logging.info(f'reading: {tcga_cnv_path}')
   tcga_cnv = datatable.fread(tcga_cnv_path, header=True).to_pandas()
 
@@ -230,6 +238,7 @@ def main(unused_argv):
   tcga_cnv = tcga_cnv.rename(columns={'index': 'sample'})
   tcga_cnv.set_index('sample', inplace=True)
 
+  # TODO(dlroxe): 4g1, 3e, 3h should be flag-configurable, not hardcoded
   tcga_os_eif = pandas.merge(tcga_os,
                              tcga_cnv[['EIF4G1', 'EIF3E', 'EIF3H']],
                              left_index=True,
@@ -241,14 +250,11 @@ def main(unused_argv):
   cnv_combined_freq_plot(count, ['AMP', 'DUP', 'DIPLOID', 'DEL', 'HOMDEL'])
   cnv_freq_plot(df=count, cnv="AMP", cutoff=0.05)
 
+  # TODO(dlroxe): 3e, 4g1 should be flag-configurable, not hardcoded
   for mode in (SurvivalComparisonMode.AMP, SurvivalComparisonMode.GAIN):
-    # TODO(dlroxe): Perhaps the plot function could infer ["OS.time"] and
-    #               ["OS"], rather than take them explicitly as arguments?
     combined_survival_plot(
       'EIF3E', 'EIF4G1',
       tcga_os_eif,
-      tcga_os_eif['OS.time'],
-      tcga_os_eif['OS'],
       mode)
 
   logging.info('KM survival analysis complete')
