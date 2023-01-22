@@ -129,6 +129,7 @@ class SurvivalComparisonMode(enum.Enum):
 # in survival rates between the groups.
 #
 # The results of these tests are displayed on the plot.
+
 def combined_survival_plot(
     gene1, gene2, tcga_cnv_os_eif, mode: SurvivalComparisonMode):
   if mode not in (SurvivalComparisonMode.AMP, SurvivalComparisonMode.GAIN):

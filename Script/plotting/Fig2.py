@@ -43,13 +43,25 @@ _SCATTERPLOT_COLOR_DICT = {
 }
 
 
-def get_EIF_CNV_RNAseq_combined_data(TCGA_CNV1, TCGA_GTEX_RNAseq, gene_name):
-  TCGA_CNV_gene = TCGA_CNV1[gene_name]
-  col_name = f'{gene_name}_CNV'
+# tcga_cnv_merged_del_thresholds: a dataframe with CNV thresholds,
+# in which HOMDEL has been replaced by DEL, because there are not
+# enough HOMDEL values for useful analysis, but HOMDEL values ought
+# to be counted in a DEL+HOMDEL analysis.
+#
+# tcga_gtex_rnaseq: contents of TcgaTargetGtex_RSEM_Hugo_norm_count
+# def get_eif_cnv_rnaseq_combined_data
+def get_EIF_CNV_RNAseq_combined_data(
+    tcga_cnv_merged_del_thresholds: pandas.DataFrame,
+    tcga_gtex_rnaseq: pandas.DataFrame,
+    gene_name: str):
   # merge RNAseq and CNV data based on sample names
+  # TODO(dlroxe): in get_RNAse_CNV_cluster() below,
+  #               tcga_cnv_merged_del_thresholds[gene_name] was renamed to
+  #               col_name... was that intended here, too?
+  #               (Perhaps that function and this one should be combined.)
   df = pandas.merge(
-    TCGA_GTEX_RNAseq,
-    TCGA_CNV_gene,
+    tcga_gtex_rnaseq,
+    tcga_cnv_merged_del_thresholds[gene_name],
     how='left',
     left_index=True,
     right_index=True,
@@ -58,6 +70,7 @@ def get_EIF_CNV_RNAseq_combined_data(TCGA_CNV1, TCGA_GTEX_RNAseq, gene_name):
   # remove all row when gene value is zero
   df = df[df[gene_name] != 0]
   # annotate the CNV status from GTEX data as "NAT"
+  col_name = f'{gene_name}_CNV'
   df.loc[df.index.str.contains('GTEX'), col_name] = "NAT"
   # remove samples without CNV status, such as target samples
   df = df[df[col_name].notna()]
@@ -116,14 +129,14 @@ def plot_RNAseq_CNV_status(df, gene_name):
 def rnaseq_cnv_corr_sum(df, gene_name):
   y = pandas.DataFrame()
   col_name = f'{gene_name}_CNV'
-  for CNV in pandas.Series(["AMP", "DUP", "DIPLOID", "DEL", 'NAT']):
-    logging.info('rnaseq_cnv_corr_sum() considering %s:%s', gene_name, CNV)
+  for cnv in pandas.Series(["AMP", "DUP", "DIPLOID", "DEL", 'NAT']):
+    logging.info('rnaseq_cnv_corr_sum() considering %s:%s', gene_name, cnv)
     # select rows based on the CNV status
-    df1 = df.loc[df[col_name] == CNV]
+    df1 = df.loc[df[col_name] == cnv]
     # remove the CNV status column to facilitate the correlation analysis
     df1 = df1.drop(col_name, axis=1)
     x = df1.corrwith(df1[gene_name])
-    x.name = CNV
+    x.name = cnv
     y = pandas.concat([y, x], axis=1)
   y.dropna(inplace=True)
   y.index.names = ["Gene_Symbol"]
@@ -133,17 +146,28 @@ def rnaseq_cnv_corr_sum(df, gene_name):
   return y, z
 
 
-def get_RNAse_CNV_cluster(TCGA_CNV1, TCGA_GTEX_RNAseq, df, gene_name):
-  cluster_RNAseq = TCGA_GTEX_RNAseq[df["gene"]]
+# tcga_cnv_merged_del_thresholds: a dataframe with CNV thresholds,
+# in which HOMDEL has been replaced by DEL, because there are not
+# enough HOMDEL values for useful analysis, but HOMDEL values ought
+# to be counted in a DEL+HOMDEL analysis.
+#
+# tcga_gtex_rnaseq: contents of TcgaTargetGtex_RSEM_Hugo_norm_count
+# def get_eif_cnv_rnaseq_combined_data
+def get_RNAse_CNV_cluster(
+    tcga_cnv_merged_del_thresholds: pandas.DataFrame,
+    tcga_gtex_rnaseq: pandas.DataFrame,
+    df,
+    gene_name):
+  cluster_RNAseq = tcga_gtex_rnaseq[df["gene"]]
   # gene_name = "EIF4G1"
-  TCGA_CNV_gene = TCGA_CNV1[gene_name]
+  tcga_cnv_gene = tcga_cnv_merged_del_thresholds[gene_name]
   col_name = f'{gene_name}_CNV'
-  TCGA_CNV_gene.rename(col_name, inplace=True)
+  tcga_cnv_gene.rename(col_name, inplace=True)
 
   # merge RNAseq and CNV data based on sample names
   df = pandas.merge(
     cluster_RNAseq,
-    TCGA_CNV_gene,
+    tcga_cnv_gene,
     how='left',
     left_index=True,
     right_index=True,
@@ -240,24 +264,24 @@ def _abspath(*args):
 def main(unused_argv):
   logging.info('commencing work for Fig2')
   ## acquire the data
-  TCGA_GTEX_RNAseq = datatable.fread(
+  tcga_gtex_rnaseq = datatable.fread(
     _abspath(FLAGS.data_directory, "TcgaTargetGtex_RSEM_Hugo_norm_count"),
     header=True).to_pandas()
-  TCGA_GTEX_RNAseq = TCGA_GTEX_RNAseq.set_index(['sample']).T
+  tcga_gtex_rnaseq = tcga_gtex_rnaseq.set_index(['sample']).T
 
   tcga_cnv_path = _abspath(
     FLAGS.output_directory, 'ProcessedData', 'TCGA-CNV-thresholds.csv')
   logging.info(f'reading: {tcga_cnv_path}')
-  TCGA_CNV = datatable.fread(tcga_cnv_path, header=True).to_pandas()
+  tcga_cnv = datatable.fread(tcga_cnv_path, header=True).to_pandas()
 
-  TCGA_CNV.set_index([TCGA_CNV.columns[0]], inplace=True)
+  tcga_cnv.set_index([tcga_cnv.columns[0]], inplace=True)
   # too few homdel samples for correlation analysis;
   # combine homdel and del samples for correlation
-  TCGA_CNV1 = TCGA_CNV.replace(['HOMDEL'], 'DEL')
+  tcga_cnv1 = tcga_cnv.replace(['HOMDEL'], 'DEL')
 
   # TCGA_GTEX_RNAseq_CNV_EIF4G1 = get_EIF_CNV_RNAseq_combined_data(gene_name = "EIF4G1")
   EIF4G1_CNV_RNA = get_EIF_CNV_RNAseq_combined_data(
-    TCGA_CNV1, TCGA_GTEX_RNAseq, "EIF4G1")
+    tcga_cnv1, tcga_gtex_rnaseq, "EIF4G1")
 
   # TODO(dlroxe): Make the list of genes flag-configurable.
   logging.info('commencing CNV-status violin plots')
@@ -273,7 +297,7 @@ def main(unused_argv):
       gene_name: str) -> Tuple[pandas.DataFrame, pandas.DataFrame]:
     complete, significant = rnaseq_cnv_corr_sum(
       df=get_EIF_CNV_RNAseq_combined_data(
-        TCGA_CNV1, TCGA_GTEX_RNAseq, gene_name),
+        tcga_cnv1, tcga_gtex_rnaseq, gene_name),
       gene_name=gene_name)
 
     # The write_csv() in polars is much faster than the to_csv() in pandas.
@@ -286,10 +310,10 @@ def main(unused_argv):
 
   logging.info('collecting combined RNASeq data')
   # TODO(dlroxe): Make gene names flag-configurable.
-  EIF3E_CNV_COR_RNAseq, EIF3E_CNV_COR_RNAseq_sig = get_combined_data("EIF3E")
-  EIF3H_CNV_COR_RNAseq, EIF3H_CNV_COR_RNAseq_sig = get_combined_data("EIF3H")
-  EIF4A2_CNV_COR_RNAseq, EIF4A2_CNV_COR_RNAseq_sig = get_combined_data("EIF4A2")
-  EIF4G1_CNV_COR_RNAseq, EIF4G1_CNV_COR_RNAseq_sig = get_combined_data("EIF4G1")
+  eif3e_cnv_cor_rnaseq, eif3e_cnv_cor_rnaseq_sig = get_combined_data("EIF3E")
+  eif3h_cnv_cor_rnaseq, eif3h_cnv_cor_rnaseq_sig = get_combined_data("EIF3H")
+  eif4a2_cnv_cor_rnaseq, eif4a2_cnv_cor_rnaseq_sig = get_combined_data("EIF4A2")
+  eif4g1_cnv_cor_rnaseq, eif4g1_cnv_cor_rnaseq_sig = get_combined_data("EIF4G1")
 
   # TODO(dlroxe): This plots just the EIF4G1 'significant' dataframe.
   #               If plotting all the other genes similarly is desirable, then
@@ -297,7 +321,7 @@ def main(unused_argv):
   #               N.B. In that case, the 4 calls to get_combined_data() above
   #               should be collapsed into a loop.
   h = seaborn.clustermap(
-    EIF4G1_CNV_COR_RNAseq_sig,
+    eif4g1_cnv_cor_rnaseq_sig,
     # EIF4G1_CNV_COR_RNAseq_sig.drop(['NAT'], axis=1),
     # cbar_pos=(.2, .2, .03, .4),
     cmap="coolwarm",
@@ -313,14 +337,14 @@ def main(unused_argv):
   # The CSV files used here are generated by .get_cluster_genes() in Fig2.R.
   # TODO(dlroxe): See about generating the .csv files in init_data.py.
   logging.info('reading cluster CSVs')
-  EIF4G1_CNV_RNA_COR_cluster1 = _read_cluster_csv('CNV_RNAseq_COR_cluster1.csv')
-  EIF4G1_CNV_RNA_COR_cluster2 = _read_cluster_csv('CNV_RNAseq_COR_cluster2.csv')
-  EIF4G1_CNV_RNA_COR_cluster3 = _read_cluster_csv('CNV_RNAseq_COR_cluster3.csv')
-  EIF4G1_CNV_RNA_COR_cluster4 = _read_cluster_csv('CNV_RNAseq_COR_cluster4.csv')
-  EIF4G1_CNV_RNA_COR_cluster5 = _read_cluster_csv('CNV_RNAseq_COR_cluster5.csv')
+  eif4g1_cnv_rna_cor_cluster1 = _read_cluster_csv('CNV_RNAseq_COR_cluster1.csv')
+  eif4g1_cnv_rna_cor_cluster2 = _read_cluster_csv('CNV_RNAseq_COR_cluster2.csv')
+  eif4g1_cnv_rna_cor_cluster3 = _read_cluster_csv('CNV_RNAseq_COR_cluster3.csv')
+  eif4g1_cnv_rna_cor_cluster4 = _read_cluster_csv('CNV_RNAseq_COR_cluster4.csv')
+  eif4g1_cnv_rna_cor_cluster5 = _read_cluster_csv('CNV_RNAseq_COR_cluster5.csv')
 
   df, df1 = get_RNAse_CNV_cluster(
-    TCGA_CNV1, TCGA_GTEX_RNAseq, EIF4G1_CNV_RNA_COR_cluster5, "EIF4G1")
+    tcga_cnv1, tcga_gtex_rnaseq, eif4g1_cnv_rna_cor_cluster5, "EIF4G1")
 
   logging.info('plotting umap')
   plot_umap(df, df1, "cluster5")
