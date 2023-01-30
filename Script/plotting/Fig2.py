@@ -17,8 +17,8 @@ from absl import logging
 from typing import Tuple
 
 # critical parameter setting!
-matplotlib.rcParams["pdf.fonttype"] = 42
-matplotlib.rcParams["ps.fonttype"] = 42
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
 matplotlib.rcParams['figure.figsize'] = 15, 15
 pandas.options.mode.chained_assignment = 'raise'  # default='warn'
 
@@ -33,6 +33,20 @@ flags.DEFINE_string('output_directory',
                     # '~/Documents/Bioinformatics_analysis/eIF4G-analysis/eIF4G_output',
                     os.path.join('~', 'Desktop', 'pyeif_output'),
                     'parent dir for output')
+
+# TODO(dlroxe): Instead of defining generate_clustermap_plots as a plain
+#               boolean flag, perhaps define a stringlist flag that specifies
+#               which genes should yield clustermap plots.
+flags.DEFINE_boolean('generate_clustermap_plots', False,
+                     'When true, causes PCA plots to be generated alongside '
+                     'UMAP plots.')
+flags.DEFINE_integer('umap_random_state', None,
+                     'Force the use of a specific random seed for UMAP plots. '
+                     'This forces the creation of UMAP plots that are '
+                     'perfectly reproducible for a given state value, '
+                     'but risks the creation of a UMAP plot that shows good '
+                     'separation as a consequence of the state value rather '
+                     'than as a consequence of the data being analyzed.')
 
 _SCATTERPLOT_COLOR_DICT = {
   'AMP': 'red',
@@ -50,12 +64,12 @@ _SCATTERPLOT_COLOR_DICT = {
 #
 # tcga_gtex_rnaseq: contents of TcgaTargetGtex_RSEM_Hugo_norm_count
 # def get_eif_cnv_rnaseq_combined_data
-def get_EIF_CNV_RNAseq_combined_data(
+def get_eif_cnv_rnaseq_combined_data(
     tcga_cnv_merged_del_thresholds: pandas.DataFrame,
     tcga_gtex_rnaseq: pandas.DataFrame,
     gene_name: str):
   # merge RNAseq and CNV data based on sample names
-  # TODO(dlroxe): in get_RNAse_CNV_cluster() below,
+  # TODO(dlroxe): in get_rnaseq_cnv_cluster() below,
   #               tcga_cnv_merged_del_thresholds[gene_name] was renamed to
   #               col_name... was that intended here, too?
   #               (Perhaps that function and this one should be combined.)
@@ -77,7 +91,7 @@ def get_EIF_CNV_RNAseq_combined_data(
   return df
 
 
-def plot_RNAseq_CNV_status(df, gene_name):
+def plot_rnaseq_cnv_status(df, gene_name):
   # seaborn.set(rc={'figure.figsize':(12,10)})
   # seaborn.set(font_scale=2)
   dft = df.groupby(['EIF4G1_CNV'])['EIF4G1_CNV'].count()
@@ -153,12 +167,12 @@ def rnaseq_cnv_corr_sum(df, gene_name):
 #
 # tcga_gtex_rnaseq: contents of TcgaTargetGtex_RSEM_Hugo_norm_count
 # def get_eif_cnv_rnaseq_combined_data
-def get_RNAse_CNV_cluster(
+def get_rnaseq_cnv_cluster(
     tcga_cnv_merged_del_thresholds: pandas.DataFrame,
     tcga_gtex_rnaseq: pandas.DataFrame,
     df,
     gene_name):
-  cluster_RNAseq = tcga_gtex_rnaseq[df["gene"]]
+  cluster_rnaseq = tcga_gtex_rnaseq[df["gene"]]
   # gene_name = "EIF4G1"
   tcga_cnv_gene = tcga_cnv_merged_del_thresholds[gene_name]
   col_name = f'{gene_name}_CNV'
@@ -166,7 +180,7 @@ def get_RNAse_CNV_cluster(
 
   # merge RNAseq and CNV data based on sample names
   df = pandas.merge(
-    cluster_RNAseq,
+    cluster_rnaseq,
     tcga_cnv_gene,
     how='left',
     left_index=True,
@@ -208,13 +222,16 @@ def plot_umap(df, df1, cluster):
   # However, a "suggested waiver" on that web page points out that such
   # reproducibility comes with the risk of producing a result that is unduly
   # influenced by the random_state value.
-  # TODO(dlroxe): It might be useful to produce plots both with and without
-  #               a random seed.  That way, others can exactly reproduce the
-  #               reproducible plot; but they can also generate and
-  #               qualitatively compare a non-reproducible plot without such
-  #               artifact risk.
+  #
+  # The behavior of this function is FLAG-configurable.  When the script is
+  # executed with --umap_random_state=<int value>, then <int value> is supplied
+  # to the random_state argument below, which will force a reproducible (but
+  # possibly misleading) result.  By default (i.e. when unspecified), 'None'
+  # is passed, which yields a non-reproducible result that is not at
+  # statistical risk.
   embedding = umap.UMAP(
-    n_neighbors=10, min_dist=0.3, random_state=42).fit_transform(scaled_data)
+    n_neighbors=10, min_dist=0.3, random_state=FLAGS.umap_random_state
+  ).fit_transform(scaled_data)
   logging.info('UMAP embedding shape: %s', embedding.shape)
   fig, ax = matplotlib.pyplot.subplots(figsize=(10, 10))
   seaborn.set_style("ticks")
@@ -236,8 +253,12 @@ def plot_umap(df, df1, cluster):
   matplotlib.pyplot.tight_layout()
   # N.B. The '-fixed' suffix below is meant to signify a reproducible plot,
   #      i.e. one made with a specified random_state value.
+  filename_suffix = 'UMAP'
+  if FLAGS.umap_random_state:
+    filename_suffix = f'UMAP-fixed-{FLAGS.umap_random_state}'
   matplotlib.pyplot.savefig(
-    _abspath(FLAGS.output_directory, "Fig2", f'{cluster}-UMAP-fixed.pdf'),
+    _abspath(
+      FLAGS.output_directory, "Fig2", f'{cluster}-{filename_suffix}.pdf'),
     # alpha=1 / 5,
     bbox_inches='tight',
     dpi=300,
@@ -280,7 +301,7 @@ def main(unused_argv):
   tcga_cnv1 = tcga_cnv.replace(['HOMDEL'], 'DEL')
 
   # TCGA_GTEX_RNAseq_CNV_EIF4G1 = get_EIF_CNV_RNAseq_combined_data(gene_name = "EIF4G1")
-  EIF4G1_CNV_RNA = get_EIF_CNV_RNAseq_combined_data(
+  eif4g1_cnv_rna = get_eif_cnv_rnaseq_combined_data(
     tcga_cnv1, tcga_gtex_rnaseq, "EIF4G1")
 
   # TODO(dlroxe): Make the list of genes flag-configurable.
@@ -288,54 +309,50 @@ def main(unused_argv):
   for gene in (
       "BRCA1", "RANGAP1", "ORC1", "CDC20", "SREBF2", "HMGCR", "HMGCS1",
       "EIF4G1", "EIF4E", "EIF4A2", "EIF3E", "CENPI", "LAMA3", "ITGA6"):
-    plot_RNAseq_CNV_status(df=EIF4G1_CNV_RNA, gene_name=gene)
+    plot_rnaseq_cnv_status(df=eif4g1_cnv_rna, gene_name=gene)
 
   # TODO(dlroxe): The next several lines seem to collect data and write it to
   #               CSV files.  Consider moving them to init_data.py, and adding
   #               tests.
-  def get_combined_data(
-      gene_name: str) -> Tuple[pandas.DataFrame, pandas.DataFrame]:
+  def get_write_and_plot_combined_data(
+      local_gene_name: str) -> Tuple[pandas.DataFrame, pandas.DataFrame]:
+    logging.info('fetching and plotting cluster data for %s', local_gene_name)
     complete, significant = rnaseq_cnv_corr_sum(
-      df=get_EIF_CNV_RNAseq_combined_data(
-        tcga_cnv1, tcga_gtex_rnaseq, gene_name),
-      gene_name=gene_name)
+      df=get_eif_cnv_rnaseq_combined_data(
+        tcga_cnv1, tcga_gtex_rnaseq, local_gene_name),
+      gene_name=local_gene_name)
 
     # The write_csv() in polars is much faster than the to_csv() in pandas.
     polars.from_pandas(significant).write_csv(
       _abspath(FLAGS.output_directory,
                'ProcessedData',
-               f'{gene_name}_CNV_COR_RNAseq_sig.csv'))
+               f'{local_gene_name}_CNV_COR_RNAseq_sig.csv'))
+
+    if FLAGS.generate_clustermap_plots:
+      h = seaborn.clustermap(
+        significant,
+        # EIF4G1_CNV_COR_RNAseq_sig.drop(['NAT'], axis=1),
+        # cbar_pos=(.2, .2, .03, .4),
+        cmap="coolwarm",
+        figsize=(10, 10),
+        # method="centroid",
+        # metric="euclidean",
+        tree_kws=dict(linewidths=0.5, colors=(0.2, 0.2, 0.4)),
+        yticklabels=False
+      )
+      matplotlib.pyplot.show()
 
     return complete, significant
 
   logging.info('collecting combined RNASeq data')
   # TODO(dlroxe): Make gene names flag-configurable.
-  eif3e_cnv_cor_rnaseq, eif3e_cnv_cor_rnaseq_sig = get_combined_data("EIF3E")
-  eif3h_cnv_cor_rnaseq, eif3h_cnv_cor_rnaseq_sig = get_combined_data("EIF3H")
-  eif4a2_cnv_cor_rnaseq, eif4a2_cnv_cor_rnaseq_sig = get_combined_data("EIF4A2")
-  eif4g1_cnv_cor_rnaseq, eif4g1_cnv_cor_rnaseq_sig = get_combined_data("EIF4G1")
-
-  # TODO(dlroxe): This plots just the EIF4G1 'significant' dataframe.
-  #               If plotting all the other genes similarly is desirable, then
-  #               this plotting code should be moved inside get_combined_data().
-  #               N.B. In that case, the 4 calls to get_combined_data() above
-  #               should be collapsed into a loop.
-  h = seaborn.clustermap(
-    eif4g1_cnv_cor_rnaseq_sig,
-    # EIF4G1_CNV_COR_RNAseq_sig.drop(['NAT'], axis=1),
-    # cbar_pos=(.2, .2, .03, .4),
-    cmap="coolwarm",
-    figsize=(10, 10),
-    # method="centroid",
-    # metric="euclidean",
-    tree_kws=dict(linewidths=0.5, colors=(0.2, 0.2, 0.4)),
-    yticklabels=False
-  )
-  matplotlib.pyplot.show()
+  for gene_name in ('EIF3E', 'EIF3H', 'EIF4A2', 'EIF4G1'):
+    get_write_and_plot_combined_data(gene_name)
 
   ### umap analysis on cluster genes from heatmap
   # The CSV files used here are generated by .get_cluster_genes() in Fig2.R.
   # TODO(dlroxe): See about generating the .csv files in init_data.py.
+  # TODO(dlroxe): Just generate the UMAP for all .csv files below, in a loop?
   logging.info('reading cluster CSVs')
   eif4g1_cnv_rna_cor_cluster1 = _read_cluster_csv('CNV_RNAseq_COR_cluster1.csv')
   eif4g1_cnv_rna_cor_cluster2 = _read_cluster_csv('CNV_RNAseq_COR_cluster2.csv')
@@ -343,19 +360,19 @@ def main(unused_argv):
   eif4g1_cnv_rna_cor_cluster4 = _read_cluster_csv('CNV_RNAseq_COR_cluster4.csv')
   eif4g1_cnv_rna_cor_cluster5 = _read_cluster_csv('CNV_RNAseq_COR_cluster5.csv')
 
-  df, df1 = get_RNAse_CNV_cluster(
+  df, df1 = get_rnaseq_cnv_cluster(
     tcga_cnv1, tcga_gtex_rnaseq, eif4g1_cnv_rna_cor_cluster5, "EIF4G1")
 
   logging.info('plotting umap')
   plot_umap(df, df1, "cluster5")
 
-  ### UMAP =======================================================
+  # UMAP =======================================================
 
   mapper = umap.UMAP().fit(df1)
   umap.plot.points(mapper)
   umap.plot.points(mapper, labels=df.EIF4G1_CNV)
 
-  ## PCA  ======================================
+  # PCA  ======================================
   penguins_data = df.select_dtypes(numpy.number)
   penguins_data.head()
   penguins_info = df.select_dtypes(exclude='float')
@@ -368,13 +385,11 @@ def main(unused_argv):
   pc_df.head()
 
   pc_df['CNV'] = cnv
-  pc_df_amp = pc_df.loc[pc_df['CNV'] == "AMP"]
-  pc_df_dup = pc_df.loc[pc_df['CNV'] == "DUP"]
-  pc_df_dip = pc_df.loc[pc_df['CNV'] == "DIPLOID"]
-  pc_df_del = pc_df.loc[pc_df['CNV'] == "DEL"]
-  pc_df_nat = pc_df.loc[pc_df['CNV'] == "NAT"]
-
   logging.info('pc_df.head():\n%s', pc_df.head())
+  for cnv_var in ('AMP', 'DUP', 'DIPLOID', 'DEL', 'NAT'):
+    pc_df_var = pc_df.loc[pc_df['CNV'] == cnv_var]
+    logging.info('pc_df_%s.head():\n%s', cnv_var, pc_df_var.head())
+
   logging.info(
     'pca.explained_variance_ratio_: %s', pca.explained_variance_ratio_)
   seaborn.set_theme(style='white')
