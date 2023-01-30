@@ -193,11 +193,13 @@ def combined_survival_plot(
   ax.text(1, 0.8,
           f'{gene2} {mode.name} vs DIPLOID p = {result2.p_value:.3f}')
   ax.text(1, 0.75,
-          f'{gene1}{gene2} {mode.name} vs DIPLOID p = {result3.p_value:.3f}')
+          f'{gene1} {gene2} {mode.name} vs DIPLOID p = {result3.p_value:.3f}')
   ax.text(1, 0.7,
-          f'{gene1} {mode.name} vs {gene1}{gene2}AMP p = {result4.p_value:.3f}')
+          f'{gene1} {mode.name} vs {gene1} {gene2} {mode.name} '
+          f'p = {result4.p_value:.3f}')
   ax.text(1, 0.65,
-          f'{gene2} {mode.name} vs {gene1}{gene2}AMP p = {result5.p_value:.3f}')
+          f'{gene2} {mode.name} vs {gene1} {gene2} {mode.name} '
+          f'p = {result5.p_value:.3f}')
 
   matplotlib.pyplot.show()
   matplotlib.pyplot.savefig(
